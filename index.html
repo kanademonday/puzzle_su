@@ -163,7 +163,7 @@ aside h3:first-child{margin-top:0}
       <label class="stb"><input type="radio" name="fSt" value="belum" checked><span>Belum landing</span></label>
       <label class="stl"><input type="radio" name="fSt" value="landing"><span>Sudah landing</span></label>
     </div>
-    <label class="chk" style="color:#ec4899;font-weight:600;margin-top:6px"><input type="checkbox" id="fTdk"> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>
+    <label class="chk" style="color:#6b7280;font-weight:600;margin-top:6px"><input type="checkbox" id="fTdk"> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>
     <label>Luas (m²) – dipakai agar ukuran puzzle sebanding</label>
     <input id="fLuas" type="number" min="0" step="any" placeholder="dari BT/SU">
     <div class="row">
@@ -237,8 +237,8 @@ const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const norm=n=>String(n||'').toUpperCase().replace(/\s+/g,'');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c',kand2:'#7c3aed',kand3:'#1e3a8a',tdk:'#ec4899'};
-// warna bidang: pink = belum landing tapi tidak ada di daftar spreadsheet (tidak bisa dipakai)
+const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c',kand2:'#7c3aed',kand3:'#1e3a8a',tdk:'#9ea4ae'};
+// warna bidang: silver = belum landing tapi tidak ada di daftar spreadsheet (tidak bisa dipakai)
 const wB=b=>b.tidakAda&&b.status!=='landing'?COL.tdk:COL[b.status];
 const stTeks=b=>b.status==='landing'?'sudah landing':b.tidakAda?'tidak ada di spreadsheet':'belum landing';
 let toastT;function toast(m,ms=2800){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),ms)}
@@ -383,7 +383,7 @@ function hubung(a,b){if(jarakBidang(a,b)<=TOL_DEMPET)return 'dempet';
 // tingkat 1: menempel bidang sudah landing • tingkat 2: menempel tingkat 1 • tingkat 3: menempel tingkat 2, dan semua yang menyambung terus darinya tetap tingkat 3
 function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'),B=d.filter(b=>b.status!=='landing'),hasil=[],lv1=[];
   const cek=(b,acuan,level)=>{const dempet=[],su=[];for(const l of acuan){const h=hubung(b,l);if(h==='dempet')dempet.push(l);else if(h==='su')su.push(l)}
-    if(dempet.length||su.length){if(!b.tidakAda)hasil.push({b,dempet,su,level});return true}return false}; // pink: tidak dipakai, tapi tetap penyambung
+    if(dempet.length||su.length){if(!b.tidakAda)hasil.push({b,dempet,su,level});return true}return false}; // silver: tidak dipakai, tapi tetap penyambung
   B.forEach(b=>{if(cek(b,L,1))lv1.push(b)});const lv2=[];B.forEach(b=>{if(!lv1.includes(b)&&cek(b,lv1,2))lv2.push(b)});
   let acuan=lv2;const sdh=new Set([...lv1,...lv2]);
   while(acuan.length){const baru=[];B.forEach(b=>{if(!sdh.has(b)&&cek(b,acuan,3)){sdh.add(b);baru.push(b)}});acuan=baru}
@@ -523,7 +523,7 @@ function renderSide(pesan,kosong){
       return `<button class="chip" data-tn="${esc(norm(t.no))}" style="${gaya}" title="${o?(o.status==='landing'?'sudah didigitasi, sudah landing':'sudah didigitasi, belum landing'):'belum ada SU-nya'}">${esc(t.no)}</button>`}).join('')}</div>
       <div style="font-size:11px;color:var(--mut);margin-top:3px">hijau = sudah landing • oranye = belum landing • putus-putus = belum ada SU</div>`:'<div class="empty" style="padding:0">Tidak ada nomor tetangga tercatat.</div>'}
     <div class="radio" style="margin-top:8px"><label class="stb"><input type="radio" name="sSt" value="belum" ${b.status!=='landing'?'checked':''}><span>Belum landing</span></label><label class="stl"><input type="radio" name="sSt" value="landing" ${b.status==='landing'?'checked':''}><span>Sudah landing</span></label></div>
-    ${b.status!=='landing'?`<label class="chk" style="margin-top:6px;color:${COL.tdk};font-weight:600"><input type="checkbox" id="sTdk" ${b.tidakAda?'checked':''}> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>`:''}
+    ${b.status!=='landing'?`<label class="chk" style="margin-top:6px;color:#6b7280;font-weight:600"><input type="checkbox" id="sTdk" ${b.tidakAda?'checked':''}> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>`:''}
     <label>Putar: <span id="selRotV"></span></label><input type="range" id="selRot" min="0" max="360" step="0.5">
     <div class="row" style="margin-top:6px"><button id="r90m">↺ 90°</button><button id="r90p">↻ 90°</button><button id="sKunci" class="${b.kunci?'on':''}">${b.kunci?'🔒 Terkunci':'🔓 Kunci'}</button></div>
     ${b.luas?'':`<label>Skala (tanpa luas): <span id="sclV">${(b.s*100).toFixed(1)} cm/px</span></label><input type="range" id="scl" min="-3" max="3" step="0.01" value="${Math.log10(b.s)}">`}
@@ -552,7 +552,7 @@ function renderSide(pesan,kosong){
   on('selRot','change',()=>simpanBidang(S.sel));
   on('r90m','click',()=>{if(S.sel.kunci)return;S.sel.rot-=Math.PI/2;simpanBidang(S.sel);updRot();draw()});
   on('r90p','click',()=>{if(S.sel.kunci)return;S.sel.rot+=Math.PI/2;simpanBidang(S.sel);updRot();draw()});
-  on('sTdk','change',e=>{S.sel.tidakAda=e.target.checked;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai pink: tidak ada di spreadsheet`:`Tanda pink bidang ${S.sel.no} dihapus`,2500)});
+  on('sTdk','change',e=>{S.sel.tidakAda=e.target.checked;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai silver: tidak ada di spreadsheet`:`Tanda silver bidang ${S.sel.no} dihapus`,2500)});
   on('sKunci','click',()=>{S.sel.kunci=!S.sel.kunci;simpanBidang(S.sel);renderSide();draw()});
   on('scl','input',e=>{S.sel.s=Math.pow(10,+e.target.value);$('#sclV').textContent=(S.sel.s*100).toFixed(1)+' cm/px';draw()});
   on('scl','change',()=>simpanBidang(S.sel));
