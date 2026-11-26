@@ -76,6 +76,10 @@ aside h3:first-child{margin-top:0}
 .radio input{display:none}
 .radio input:checked+span{font-weight:600}
 .radio label:has(input:checked){border-color:var(--acc);background:#e8efff}
+.radio label.stb{background:#fff5f7;border-color:#f3c2cf;color:#a61e4d}
+.radio label.stl{background:#f3fbf6;border-color:#bfe5cd;color:#157a42}
+.radio label.stb:has(input:checked){background:#ffd6e0;border:2px solid #d6336c;color:#a61e4d}
+.radio label.stl:has(input:checked){background:#c9f0d8;border:2px solid #1f9d55;color:#0f6b38}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;max-width:90vw}
 #toast.show{opacity:1}
 .menu{position:relative}
@@ -156,8 +160,8 @@ aside h3:first-child{margin-top:0}
     <input id="fNo" placeholder="isi sendiri bila tidak tertulis di SU">
     <label>Status di Bhumi ATR</label>
     <div class="radio">
-      <label><input type="radio" name="fSt" value="belum" checked><span>Belum landing</span></label>
-      <label><input type="radio" name="fSt" value="landing"><span>Sudah landing</span></label>
+      <label class="stb"><input type="radio" name="fSt" value="belum" checked><span>Belum landing</span></label>
+      <label class="stl"><input type="radio" name="fSt" value="landing"><span>Sudah landing</span></label>
     </div>
     <label>Luas (m²) – dipakai agar ukuran puzzle sebanding</label>
     <input id="fLuas" type="number" min="0" step="any" placeholder="dari BT/SU">
@@ -254,7 +258,7 @@ function keLokal(b,w){const dx=w[0]-b.x,dy=w[1]-b.y,co=Math.cos(b.rot),si=Math.s
 function hitungSkala(b){const a=luasPoly(b.poly);if(b.luas>0&&a>0)return Math.sqrt(b.luas/a);return b.s||0.1}
 
 /* ================= PENYIMPANAN (IndexedDB) ================= */
-const S={peta:[],bidang:[],aktif:null,sel:null,view:{x:0,y:0,z:1},opt:{img:true,garis:true,snap:true,alpha:.8,lanjut:true},antrian:[]};
+const S={peta:[],bidang:[],aktif:null,sel:null,view:{x:0,y:0,z:1},opt:{img:true,garis:true,snap:true,alpha:.8,lanjut:true,autoSusun:lsGet('puzzleSU.autoSusun')!=='0'},antrian:[]};
 let db=null;const memImg=new Map();const imgEl=new Map();
 function openDB(){return new Promise(res=>{try{const r=indexedDB.open('puzzleSU',2);r.onupgradeneeded=()=>{const d=r.result;['peta','bidang','img','antrian'].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:'id'})})};r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
 function dbAll(st){return new Promise(res=>{if(!db)return res(st==='img'?[...memImg.values()]:[]);try{const q=db.transaction(st).objectStore(st).getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])}catch(e){res([])}})}
@@ -297,9 +301,55 @@ function letakkanOtomatis(b,lain){
   return sumber}
 
 /* Kembalikan posisi ke perkiraan (berdasarkan bidang lain di peta yang sama) */
-function kembalikanPerkiraan(b){const m=letakkanOtomatis(b,bidangAktif().filter(x=>x!==b));simpanBidang(b);renderSide();draw();toast(`Bidang ${b.no} dikembalikan ke perkiraan – ${m}`,3500)}
-function susunSemua(){const d=bidangAktif().sort((a,b)=>(a.dibuat||0)-(b.dibuat||0));const ok=d.filter(b=>b.kunci);let n=0;
-  for(const b of d){if(b.kunci)continue;letakkanOtomatis(b,ok);simpanBidang(b);ok.push(b);n++}fit();renderSide();toast(`${n} bidang disusun ulang dari perkiraan${ok.length>n?' (bidang terkunci tidak dipindah)':''}`,3500)}
+/* ===== SUSUN OTOMATIS GLOBAL =====
+   Semua hubungan tetangga dipakai bersamaan: tiap nomor tetangga di SU bidang A yang sudah punya bidang B memberi kendala
+   "B berada di arah tanda nomor itu dan menempel dengan A". Posisi diselesaikan berulang (rata-rata kendala), lalu bidang yang
+   tumpang-tindih didorong keluar. Putaran tidak diubah; bidang terkunci 🔒 tidak digeser dan jadi patokan. */
+function geomLokal(b){const co=Math.cos(b.rot),si=Math.sin(b.rot);return b.poly.map(q=>{const dx=(q[0]-b.c[0])*b.s,dy=(q[1]-b.c[1])*b.s;return[dx*co-dy*si,dx*si+dy*co]})}
+function hull(pts){const p=[...pts].sort((a,b)=>a[0]-b[0]||a[1]-b[1]);if(p.length<3)return p;const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[],up=[];for(const q of p){while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],q)<=0)lo.pop();lo.push(q)}
+  for(const q of p.slice().reverse()){while(up.length>=2&&cr(up[up.length-2],up[up.length-1],q)<=0)up.pop();up.push(q)}return lo.slice(0,-1).concat(up.slice(0,-1))}
+function mtv(A,pa,B,pb){let best=Infinity,ax=null; // vektor untuk mengeluarkan B dari A (SAT), null bila tidak tumpang-tindih
+  for(const P of [A,B])for(let i=0;i<P.length;i++){const p1=P[i],p2=P[(i+1)%P.length];let nx=p1[1]-p2[1],ny=p2[0]-p1[0];const l=Math.hypot(nx,ny);if(!l)continue;nx/=l;ny/=l;
+    let a0=Infinity,a1=-Infinity,b0=Infinity,b1=-Infinity;
+    for(const v of A){const d=(v[0]+pa[0])*nx+(v[1]+pa[1])*ny;if(d<a0)a0=d;if(d>a1)a1=d}
+    for(const v of B){const d=(v[0]+pb[0])*nx+(v[1]+pb[1])*ny;if(d<b0)b0=d;if(d>b1)b1=d}
+    const o=Math.min(a1,b1)-Math.max(a0,b0);if(o<=0)return null;
+    if(o<best){best=o;const sg=((pb[0]-pa[0])*nx+(pb[1]-pa[1])*ny)<0?-1:1;ax=[nx*sg*o,ny*sg*o]}}
+  return ax}
+function susunTata(daftar,bebas){
+  const idx=new Map(daftar.map((b,i)=>[b,i])),per=new Map(daftar.map(b=>[norm(b.no),b]));
+  const G=daftar.map(geomLokal),H=G.map(hull),Rd=G.map(g=>Math.max(...g.map(v=>Math.hypot(v[0],v[1]))));
+  const sup=(g,u)=>g.reduce((m,v)=>Math.max(m,v[0]*u[0]+v[1]*u[1]),-Infinity);
+  const K=[];
+  daftar.forEach((A,i)=>(A.tetangga||[]).forEach(t=>{const B=per.get(norm(t.no));if(!B||B===A)return;const j=idx.get(B);
+    const co=Math.cos(A.rot),si=Math.sin(A.rot),mx=(t.x-A.c[0])*A.s,my=(t.y-A.c[1])*A.s,m=[mx*co-my*si,mx*si+my*co],L=Math.hypot(m[0],m[1]);if(L<1e-6)return;
+    const u=[m[0]/L,m[1]/L],jar=sup(G[i],u)+sup(G[j],[-u[0],-u[1]]);K.push({i,j,d:[u[0]*jar,u[1]*jar]})}));
+  const P=daftar.map(b=>[b.x,b.y]),free=daftar.map(b=>bebas.has(b)&&!b.kunci);
+  // tiap kelompok yang saling terhubung butuh satu patokan
+  const adj=daftar.map(()=>[]);K.forEach(k=>{adj[k.i].push(k.j);adj[k.j].push(k.i)});const seen=daftar.map(()=>false);
+  for(let s0=0;s0<daftar.length;s0++){if(seen[s0])continue;const comp=[],st=[s0];seen[s0]=true;
+    while(st.length){const x=st.pop();comp.push(x);adj[x].forEach(y=>{if(!seen[y]){seen[y]=true;st.push(y)}})}
+    if(comp.every(x=>free[x])){const a=comp.reduce((a,x)=>adj[x].length>adj[a].length?x:a,comp[0]);free[a]=false}}
+  const IT=400;
+  for(let n=0;n<IT;n++){
+    if(n<IT-40){const acc=daftar.map(()=>[0,0,0]);
+      K.forEach(k=>{acc[k.j][0]+=P[k.i][0]+k.d[0];acc[k.j][1]+=P[k.i][1]+k.d[1];acc[k.j][2]++;acc[k.i][0]+=P[k.j][0]-k.d[0];acc[k.i][1]+=P[k.j][1]-k.d[1];acc[k.i][2]++});
+      for(let i=0;i<P.length;i++)if(free[i]&&acc[i][2]){P[i][0]+=.5*(acc[i][0]/acc[i][2]-P[i][0]);P[i][1]+=.5*(acc[i][1]/acc[i][2]-P[i][1])}}
+    if(n>IT*.35)for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){if(!free[i]&&!free[j])continue;const r=Rd[i]+Rd[j];
+      if(Math.abs(P[i][0]-P[j][0])>r||Math.abs(P[i][1]-P[j][1])>r)continue;const v=mtv(H[i],P[i],H[j],P[j]);if(!v||Math.hypot(v[0],v[1])<.02)continue;
+      if(free[i]&&free[j]){P[i][0]-=v[0]/2;P[i][1]-=v[1]/2;P[j][0]+=v[0]/2;P[j][1]+=v[1]/2}else if(free[j]){P[j][0]+=v[0];P[j][1]+=v[1]}else{P[i][0]-=v[0];P[i][1]-=v[1]}}}
+  let n=0;daftar.forEach((b,i)=>{if(free[i]&&Math.hypot(b.x-P[i][0],b.y-P[i][1])>1e-3){b.x=P[i][0];b.y=P[i][1];simpanBidang(b);n++}});
+  return{n,k:K.length,terhubung:new Set(K.flatMap(k=>[daftar[k.i],daftar[k.j]]))}}
+function simpanUndoTata(){S.undoTata=bidangAktif().map(b=>[b,b.x,b.y,b.rot])}
+function batalTata(){if(!S.undoTata)return;S.undoTata.forEach(([b,x,y,r])=>{b.x=x;b.y=y;b.rot=r;simpanBidang(b)});S.undoTata=null;renderSide();draw();toast('Susunan dikembalikan seperti sebelumnya',2500)}
+/* Kembalikan satu bidang ke posisi perkiraan (bidang lain jadi patokan) */
+function kembalikanPerkiraan(b){simpanUndoTata();const d=bidangAktif();b.rot=0;const r=susunTata(d,new Set([b]));
+  let m;if(!r.terhubung.has(b)){m=letakkanOtomatis(b,d.filter(x=>x!==b));simpanBidang(b)}else m='mengikuti semua tetangganya';
+  renderSide();draw();toast(`Bidang ${b.no} dikembalikan ke perkiraan – ${m}`,3500)}
+/* Susun otomatis seluruh peta: semua bidang tidak terkunci ikut menyesuaikan */
+function susunSemua(diam){const d=bidangAktif();if(d.length<2)return;if(!diam)simpanUndoTata();const r=susunTata(d,new Set(d));draw();renderSide();
+  if(!diam){fit();toast(`${r.n} bidang disusun dari ${r.k} hubungan tetangga${d.some(b=>b.kunci)?' (bidang terkunci 🔒 jadi patokan)':''}. Tidak cocok? klik ↶ Batalkan susunan.`,5000)}return r}
 
 /* Kandidat landing: bidang belum landing yang menempel (di puzzle) atau bertetangga (menurut SU) dengan bidang sudah landing */
 const TOL_DEMPET=1.5; // meter
@@ -406,7 +456,9 @@ function renderSide(pesan,kosong){
   let h='';
   h+=`<h3>Peta analog</h3>`;
   if(p){h+=`<div class="row"><input id="pNama" value="${esc(p.nama)}"><button id="pRen" title="Simpan nama">✔</button><button id="pDel" class="dan" title="Hapus peta">🗑</button></div>`;
-    if(d.length>1)h+=`<button id="pSusun" style="width:100%;margin-top:6px" title="Semua bidang yang tidak dikunci dikembalikan ke posisi perkiraan">↺ Susun ulang semua dari perkiraan</button>`}
+    if(d.length>1)h+=`<button id="pSusun" style="width:100%;margin-top:6px" title="Semua bidang menyesuaikan dengan SEMUA nomor tetangganya sekaligus. Kunci 🔒 bidang yang sudah benar agar jadi patokan.">🧩 Susun otomatis seluruh peta</button>`;
+    if(S.undoTata)h+=`<button id="pBatal" style="width:100%;margin-top:4px">↶ Batalkan susunan terakhir</button>`;
+    if(d.length>1)h+=`<label class="chk"><input type="checkbox" id="oAuto" ${S.opt.autoSusun?'checked':''}> Susun ulang otomatis tiap ada bidang baru</label>`}
   else h+=`<div class="empty">Belum ada. Peta analog dibuat saat menyimpan bidang pertama.</div>`;
   h+=`<div class="stats"><div class="stat"><b>${d.length}</b><span>bidang</span></div><div class="stat"><b style="color:${COL.landing}">${nL}</b><span>sudah landing</span></div><div class="stat"><b style="color:${COL.belum}">${d.length-nL}</b><span>belum landing</span></div></div>`;
   h+=`<div class="legend"><span><i class="dot" style="background:${COL.landing}"></i>Sudah landing</span><span><i class="dot" style="background:${COL.belum}"></i>Belum landing</span><span><i class="dot" style="border:2px dashed ${COL.kosong}"></i>Tetangga belum ada SU</span></div>`;
@@ -429,7 +481,7 @@ function renderSide(pesan,kosong){
       const gaya=o?(o.status==='landing'?`border-color:${COL.landing};background:#e7f6ed`:`border-color:${COL.belum};background:#fdf0e3`):`border:1px dashed ${COL.kosong};background:#f4f5f7`;
       return `<button class="chip" data-tn="${esc(norm(t.no))}" style="${gaya}" title="${o?(o.status==='landing'?'sudah didigitasi, sudah landing':'sudah didigitasi, belum landing'):'belum ada SU-nya'}">${esc(t.no)}</button>`}).join('')}</div>
       <div style="font-size:11px;color:var(--mut);margin-top:3px">hijau = sudah landing • oranye = belum landing • putus-putus = belum ada SU</div>`:'<div class="empty" style="padding:0">Tidak ada nomor tetangga tercatat.</div>'}
-    <div class="radio" style="margin-top:8px"><label><input type="radio" name="sSt" value="belum" ${b.status!=='landing'?'checked':''}><span>Belum landing</span></label><label><input type="radio" name="sSt" value="landing" ${b.status==='landing'?'checked':''}><span>Sudah landing</span></label></div>
+    <div class="radio" style="margin-top:8px"><label class="stb"><input type="radio" name="sSt" value="belum" ${b.status!=='landing'?'checked':''}><span>Belum landing</span></label><label class="stl"><input type="radio" name="sSt" value="landing" ${b.status==='landing'?'checked':''}><span>Sudah landing</span></label></div>
     <label>Putar: <span id="selRotV"></span></label><input type="range" id="selRot" min="0" max="360" step="0.5">
     <div class="row" style="margin-top:6px"><button id="r90m">↺ 90°</button><button id="r90p">↻ 90°</button><button id="sKunci" class="${b.kunci?'on':''}">${b.kunci?'🔒 Terkunci':'🔓 Kunci'}</button></div>
     ${b.luas?'':`<label>Skala (tanpa luas): <span id="sclV">${(b.s*100).toFixed(1)} cm/px</span></label><input type="range" id="scl" min="-3" max="3" step="0.01" value="${Math.log10(b.s)}">`}
@@ -470,7 +522,7 @@ function renderSide(pesan,kosong){
   on('aSemua','click',()=>salinKeAcad(bidangAktif()));
   on('gSalin','click',()=>salinGambar(S.sel));
   on('gSimpan','click',()=>simpanGambar(S.sel));
-  on('pSusun','click',e=>arm(e.target,susunSemua,'Yakin? posisi geseranmu hilang'));
+  on('pSusun','click',()=>susunSemua());on('pBatal','click',batalTata);on('oAuto','change',e=>{S.opt.autoSusun=e.target.checked;lsSet('puzzleSU.autoSusun',e.target.checked?'1':'0')});
   side.querySelectorAll('[data-qr]').forEach(el=>el.addEventListener('click',()=>{const a=S.antrian.find(x=>x.id===el.dataset.qr);if(a)bacaUlang(a)}));
   on('qUlang','click',()=>S.antrian.filter(a=>a.status!=='proses'&&(a.pesan||!a.luas)).forEach(bacaUlang));
   on('oLanjut','change',e=>{S.opt.lanjut=e.target.checked});
@@ -617,6 +669,8 @@ $('#eSave').onclick=()=>{
   if(baru||ganti){const lain=S.bidang.filter(x=>x.petaId===p.id&&x!==b);pesan=letakkanOtomatis(b,lain)}
   else if(cLama&&!E.imgData){/* batas berubah: jaga posisi tetap */}
   if(baru)S.bidang.push(b);simpanBidang(b);
+  if((baru||ganti)&&S.opt.autoSusun){const d=S.bidang.filter(x=>x.petaId===p.id);if(d.length>1){S.undoTata=d.map(x=>[x,x.x,x.y,x.rot]);
+    const r=susunTata(d,new Set(d));if(r.n)pesan+=` • ${r.n} bidang ikut menyesuaikan`}}
   S.aktif=p.id;lsSet('puzzleSU.aktif',S.aktif);S.sel=b;tutupEditor();renderSel();
   if(baru&&S.bidang.filter(x=>x.petaId===p.id).length===1)fit();else fokus(b);renderSide();
   toast(`Bidang ${no} disimpan${pesan?' – '+pesan:''}`,4000);

@@ -20,7 +20,7 @@ lokasi bidang yang sudah / belum landing di Bhumi ATR. Bahasa UI & jawaban: **Ba
 - PUZZLE: `draw()`, interaksi pointer (geser, putar via handle, snap titik sudut), `fit()`
 - PANEL SAMPING: `renderSide()`
 - EDITOR SU: mode batas / tetangga / geser, popup nomor tetangga, tombol Simpan (`#eSave`)
-- DATA juga: `kembalikanPerkiraan(b)`, `susunSemua()` (tombol reset posisi)
+- SUSUN GLOBAL: `susunTata(daftar,bebas)` (kendala dari semua nomor tetangga + dorong tumpang-tindih SAT `mtv`, putaran tetap, bidang terkunci = patokan), `susunSemua()`, `kembalikanPerkiraan(b)`, undo `S.undoTata`/`batalTata()`, opsi `S.opt.autoSusun`
 - EDITOR juga: mode potong (`potong()`, undo via `E.stack`), popup nomor tetangga otomatis OK saat klik tempat lain, chip saran `E.saran`
 - BANYAK SU: `masukkanBanyak()` → `prosesSatu()` (pdf.js, nama file `bacaNamaFile`, AI berantai Groq→Gemini→OpenRouter→Ollama `panggilAI`/`panggilProv`, penyedia penuh dicatat di `penuh{}` lalu pindah; kunci di localStorage `plotkw.ai` (sama dengan landing_otomatis), aktif/nonaktif di `puzzleSU.aiAktif`; `bacaUlang()` tombol ↻)
 - DAFTAR SU: `bukaDaftar()`/`renderDaftar()` (semua bidang + antrian, pencarian), `cekNama()` hanya baca nama file → `#cekMasuk` memasukkan yang baru ke antrian; kunci duplikat dari `petaSUada()`
