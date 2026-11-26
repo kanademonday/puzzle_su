@@ -29,6 +29,8 @@ lokasi bidang yang sudah / belum landing di Bhumi ATR. Bahasa UI & jawaban: **Ba
 - TIDAK ADA DI SPREADSHEET: `b.tidakAda` (hanya untuk belum landing), warna coklat `COL.tdk` lewat `wB(b)`, garis putus-putus, bukan kandidat landing tapi tetap penyambung rantai, layer `SU_TIDAK_ADA_SPREADSHEET`
 - DUPLIKAT SU: `kunciBidang()` (pemisah / \ - . spasi), `kunciSemuaBidang()` (No.SU + nama file + catatan), peringatan saat simpan `E.konfSU`
 - MODE LANDING (tingkat 1 merah muda, 2 ungu, 3 biru tua = tingkat 3 dan seterusnya yang menyambung, `hubung()`): `kandidatLanding()` (jarak poligon ≤ `TOL_DEMPET` m atau saling tercatat sebagai tetangga di SU), tombol `#btnLanding`
+- PANEL - KE AUTOCAD: KARTU INFO: `aturPanel(tutup)` (☰ / otomatis tutup bila lebar < 1100 px lewat `cekSempit`), `renderInfo()` kartu kiri atas saat panel tertutup + bidang terpilih; `ukurCanvas` menggeser `S.view.x` agar tampilan tidak bergeser
+- NO. HAK: `b.hak` = `normHak()` 5 angka terakhir dengan nol depan; tombol salin `cpBtn` (No. SU tanpa tahun `suTanpaTahun`, No. Hak, NIB)
 - KE AUTOCAD: `lispBidang()` (entmake LWPOLYLINE+TEXT, Y dibalik), `salinGambar()`, `simpanGambar()` (JPG + world file .jgw untuk MAPIINSERT)
 - EKSPOR/IMPOR: JSON cadangan (gabung berdasarkan nomor + `diubah` terbaru), DXF R12 (Y dibalik, meter lokal), CSV, PNG
 
