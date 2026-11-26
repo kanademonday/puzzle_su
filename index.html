@@ -666,7 +666,8 @@ function bukaPop(sx,sy,idx,pt){E.popIdx=idx;E.popPt=pt;const p=$('#pop'),W=ecv.c
   $('#popChips').querySelectorAll('button').forEach(c=>c.onclick=()=>{$('#popIn').value=c.dataset.n;okPop()});setTimeout(()=>$('#popIn').focus(),0)}
 function okPop(){const v=$('#popIn').value.trim();if(v){if(E.popIdx>=0)E.tet[E.popIdx].no=v;else E.tet.push({no:v,x:E.popPt[0],y:E.popPt[1]})}$('#pop').hidden=true;renderTet();eDraw()}
 $('#popOk').onclick=okPop;
-$('#popIn').addEventListener('blur',e=>{const r=e.relatedTarget;if(r&&!$('#pop').contains(r)&&!$('#pop').hidden)okPop()}); // pindah ke isian/tombol lain = OK$('#popIn').addEventListener('keydown',e=>{if(e.key==='Enter')okPop();if(e.key==='Escape')$('#pop').hidden=true});
+$('#popIn').addEventListener('blur',e=>{const r=e.relatedTarget;if(r&&!$('#pop').contains(r)&&!$('#pop').hidden)okPop()}); // pindah ke isian/tombol lain = OK
+$('#popIn').addEventListener('keydown',e=>{if(e.key==='Enter')okPop();if(e.key==='Escape')$('#pop').hidden=true});
 $('#popDel').onclick=()=>{if(E.popIdx>=0)E.tet.splice(E.popIdx,1);$('#pop').hidden=true;renderTet();eDraw()};
 ecv.addEventListener('contextmenu',e=>e.preventDefault());
 ecv.addEventListener('pointerdown',e=>{if(!E.img)return;ecv.setPointerCapture(e.pointerId);if(!$('#pop').hidden){if(e.button===2){$('#pop').hidden=true;E.drag=null;return}okPop()} // klik kanan = batal; klik lain: diketik = OK, kosong = dibuang
@@ -674,7 +675,7 @@ const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,q=e2i
   if(e.button!==0||E.mode==='geser'){E.drag={m:'pan',sx,sy,vx:E.v.x,vy:E.v.y,kanan:e.button===2,gerak:false};return}
   if(E.mode==='potong'){E.drag={m:'crop',a:q,b:q};return}
   if(E.mode==='batas'){const i=E.poly.findIndex(p=>{const s=i2e(p);return Math.hypot(s[0]-sx,s[1]-sy)<9});
-    if(i===0&&!E.closed&&E.poly.length>=3){E.closed=true;eDraw();toast('Batas bidang tertutup. Lanjut: tandai nomor tetangga.');setMode('tet');return}
+    if(i===0&&!E.closed&&E.poly.length>=3){E.closed=true;eDraw();setMode('tet');keNoSendiri();return}
     if(i>=0){E.drag={m:'vtx',i};return}
     if(!E.closed){E.poly.push(q);eDraw()}else toast('Batas sudah tertutup. Seret titik untuk mengubah, atau “Hapus batas” untuk ulang.');return}
   if(E.mode==='tet'){const i=E.tet.findIndex(t=>{const s=i2e([t.x,t.y]);return Math.hypot(s[0]-sx,s[1]-sy)<10});
@@ -689,7 +690,7 @@ $('#mBatas').onclick=()=>setMode('batas');$('#mTet').onclick=()=>setMode('tet');
 $('#bUndo').onclick=()=>{if(E.mode==='potong'){const st=E.stack.pop();if(!st)return toast('Tidak ada potongan untuk dibatalkan');E.poly=st.poly;E.tet=st.tet;E.imgData=st.data;muatGambar(st.src,false);renderTet();return}
   if(E.closed)E.closed=false;else E.poly.pop();eDraw()};
 $('#bClear').onclick=()=>{E.poly=[];E.closed=false;setMode('batas')};
-$('#bFull').onclick=()=>{if(!E.img)return;const w=E.img.width,h=E.img.height;E.poly=[[0,0],[w,0],[w,h],[0,h]];E.closed=true;setMode('tet')};
+$('#bFull').onclick=()=>{if(!E.img)return;const w=E.img.width,h=E.img.height;E.poly=[[0,0],[w,0],[w,h],[0,h]];E.closed=true;setMode('tet');keNoSendiri()};
 $('#bEFit').onclick=eFit;
 const pilihImg=()=>$('#fImg').click();$('#bImg').onclick=pilihImg;$('#bImg2').onclick=pilihImg;
 $('#fImg').onchange=e=>{bacaFile(e.target.files[0]);e.target.value=''};
@@ -700,6 +701,10 @@ window.addEventListener('paste',e=>{if(!E.open)return;
   if((e.clipboardData?.types||[]).includes('text/plain')&&E.img)return;
   const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(it){e.preventDefault();bacaFile(it.getAsFile())}});
 $('#fNo').addEventListener('input',eDraw);
+// Setelah batas tertutup: kursor langsung ke "Nomor pendaftaran bidang ini" (teks lama terpilih, tinggal ketik). Enter = lanjut tandai tetangga.
+function keNoSendiri(){setTimeout(()=>{const f=$('#fNo');f.focus();f.select();f.style.boxShadow='0 0 0 3px #2563eb66';setTimeout(()=>f.style.boxShadow='',2500)},40);
+  toast('Batas tertutup. Ketik nomor pendaftaran bidang ini, lalu Enter untuk lanjut menandai nomor tetangga.',4000)}
+$('#fNo').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#fNo').blur();if(E.closed)setMode('tet');toast('Lanjut: klik posisi nomor-nomor tetangga di gambar.',2500)}});
 $('#eCancel').onclick=tutupEditor;
 $('#fOff').onchange=e=>{if(e.target.checked)$('#fTdk').checked=false};$('#fTdk').onchange=e=>{if(e.target.checked)$('#fOff').checked=false};
 window.addEventListener('keydown',e=>{if(E.open&&e.key==='Escape'&&$('#pop').hidden)tutupEditor()});
