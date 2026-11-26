@@ -107,6 +107,7 @@ aside h3:first-child{margin-top:0}
   <h1>🧩 Puzzle SU</h1>
   <select id="petaSel" style="max-width:260px"></select>
   <div class="sp"></div>
+  <button id="btnDaftar" title="Daftar semua SU yang sudah dimasukkan + cek nama file">📋 Daftar SU</button>
   <button id="btnLanding" title="Tampilkan bidang belum landing yang menempel dengan bidang sudah landing">🎯 Landing</button>
   <button id="btnBanyak" title="Pilih banyak PDF/gambar SU sekaligus">📥 Banyak SU</button><input type="file" id="fBanyak" multiple accept="application/pdf,.pdf,image/*" hidden>
   <button class="pri" id="btnAdd">+ Bidang dari SU</button>
@@ -204,6 +205,23 @@ aside h3:first-child{margin-top:0}
   <div id="aiList"></div>
   <div class="row" style="margin-top:4px"><button class="pri" id="aiSimpan">Simpan</button><button id="aiTes">Tes semua</button></div>
   <div id="aiStat" style="margin-top:8px;font-size:13px"></div>
+ </div></div></div>
+<div id="suDlg" hidden style="position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:30">
+ <div class="mbox" style="height:min(820px,94vh)"><div class="mhead"><h2>Daftar SU yang sudah dimasukkan</h2><button id="suTutup">Tutup</button></div>
+ <div class="mbody" style="min-height:0">
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0;padding:12px;border-right:1px solid var(--line)">
+   <input id="suCari" placeholder="cari no. SU (mis. 02201/1992 atau 2201), no. pendaftaran, NIB, nama file, peta analog">
+   <div id="suInfo" style="font-size:12px;color:var(--mut);margin:6px 0"></div>
+   <div style="flex:1;overflow:auto;border:1px solid var(--line);border-radius:8px"><table id="suTab" style="width:100%;border-collapse:collapse;font-size:13px"></table></div>
+  </div>
+  <div style="width:400px;display:flex;flex-direction:column;padding:12px;min-height:0">
+   <b>Cek nama file sebelum diproses</b>
+   <div style="font-size:12px;color:var(--mut);margin:4px 0 8px">Hanya <b>nama file</b> yang dilihat. Isi PDF tidak dibuka, tidak disimpan, tidak dikirim ke mana pun.</div>
+   <div id="cekDrop" style="border:2px dashed #b9c0cc;border-radius:10px;padding:14px;text-align:center;color:var(--mut)">Seret PDF ke sini atau <button id="cekPilih" type="button">Pilih PDF</button><input type="file" id="fCek" multiple accept="application/pdf,.pdf,image/*" hidden></div>
+   <div id="cekRingkas" style="margin:8px 0;font-size:13px"></div>
+   <div style="flex:1;overflow:auto;border:1px solid var(--line);border-radius:8px"><table id="cekTab" style="width:100%;border-collapse:collapse;font-size:12px"></table></div>
+   <button class="pri" id="cekMasuk" style="margin-top:8px" hidden></button>
+  </div>
  </div></div></div>
 <div id="toast"></div>
 
@@ -720,8 +738,7 @@ let antriProses=Promise.resolve();
 function masukkanBanyak(files){const arr=[...files].filter(f=>/^image\//.test(f.type)||/\.pdf$/i.test(f.name)||f.type==='application/pdf');
   if(!arr.length)return toast('Pilih berkas PDF atau gambar SU');
   const petaNama=petaAktif()?.nama||'';
-  const ada=new Map();S.bidang.forEach(b=>{const k=kunciBidang(b);if(k)ada.set(k,'sudah jadi bidang '+b.no);if(b.berkas)ada.set('f:'+b.berkas.toLowerCase(),'sudah jadi bidang '+b.no)});
-  S.antrian.forEach(a=>ada.set(kunciSU(a.su,a.tahun,a.nama),'sudah di antrian'));
+  const ada=petaSUada();
   const lewat=[],baru=[];
   arr.forEach(f=>{const nf=bacaNamaFile(f.name),k=kunciSU(nf.nomor,nf.tahun,f.name);
     if(ada.has(k))lewat.push(`${nf.nomor?nf.nomor+'/'+nf.tahun:f.name} (${ada.get(k)})`);else{ada.set(k,'dobel di pilihan ini');baru.push(f)}});
@@ -761,6 +778,10 @@ function bacaUlang(a){if(!a.img)return;const hal=a.hal||[a.img],nf=bacaNamaFile(
     a.status='siap';if(S.antrian.includes(a)){dbPut('antrian',a);renderSide();toast(`Selesai dibaca ulang: ${a.nama}`,2500)}})}
 // Kunci pembeda SU: nomor 5 angka + tahun (nomor sama tapi tahun beda = SU berbeda); tanpa pola di nama file → nama file
 const kunciSU=(su,th,nama)=>su&&th?String(su).padStart(5,'0')+'/'+th:'f:'+String(nama).toLowerCase();
+// Semua SU yang sudah dimasukkan: kunci -> keterangan
+function petaSUada(){const ada=new Map(),np=id=>S.peta.find(p=>p.id===id)?.nama||'?';
+  S.bidang.forEach(b=>{const t=`sudah jadi bidang ${b.no} (${np(b.petaId)})`,k=kunciBidang(b);if(k)ada.set(k,t);if(b.berkas)ada.set('f:'+b.berkas.toLowerCase(),t)});
+  S.antrian.forEach(a=>{if(!ada.has(kunciSU(a.su,a.tahun,a.nama)))ada.set(kunciSU(a.su,a.tahun,a.nama),'sudah di antrian')});return ada}
 function kunciBidang(b){const m=String(b.su||'').match(/(\d{1,6})\s*\/\s*(\d{4})/);return m?m[1].padStart(5,'0')+'/'+m[2]:null}
 $('#btnBanyak').onclick=()=>$('#fBanyak').click();
 $('#fBanyak').onchange=e=>{masukkanBanyak(e.target.files);e.target.value=''};
@@ -794,6 +815,33 @@ async function simpanGambar(b){try{const d=await dataGambar(b);const im=await ne
   download(nm+'.jpg',dataKeBlob(d));setTimeout(()=>download(nm+'.jgw',jgw,'text/plain'),700);
   toast(`Diunduh ${nm}.jpg + ${nm}.jgw (${im.width}×${im.height} px). Di AutoCAD Map 3D: MAPIINSERT → pilih .jpg → Correlation: World file. Gambar langsung pas dengan polyline.`,8000)}
   catch(e){toast('Gagal menyimpan gambar: '+e.message,4000)}}
+
+/* ================= DAFTAR SU + CEK NAMA FILE ================= */
+let cekBaru=[];
+const tdS='padding:5px 8px;border-bottom:1px solid #eef0f3;text-align:left;vertical-align:top';
+function bukaDaftar(){$('#suDlg').hidden=false;renderDaftar();setTimeout(()=>$('#suCari').focus(),50)}
+function renderDaftar(){const q=norm($('#suCari').value),np=id=>S.peta.find(p=>p.id===id)?.nama||'?';
+  const baris=[...S.bidang.map(b=>({su:kunciBidang(b)||b.su||'',no:b.no,peta:np(b.petaId),st:b.status==='landing'?'sudah landing':'belum landing',warna:COL[b.status],luas:b.luas,nib:b.nib||'',berkas:b.berkas||'',b})),
+    ...S.antrian.map(a=>({su:a.su?String(a.su).padStart(5,'0')+(a.tahun?'/'+a.tahun:''):'',no:a.no||'',peta:a.petaNama||'',st:'di antrian',warna:COL.kosong,luas:a.luas,nib:'',berkas:a.nama,a}))]
+    .sort((x,y)=>x.su.localeCompare(y.su,'id',{numeric:true}));
+  const cocok=q?baris.filter(r=>[r.su,r.su.replace(/^0+/,''),r.no,r.nib,r.berkas,r.peta].some(v=>norm(v).includes(q))):baris;
+  $('#suInfo').textContent=`${cocok.length} dari ${baris.length} SU (${S.bidang.length} bidang, ${S.antrian.length} di antrian)${cocok.length>400?' – ditampilkan 400 pertama, persempit pencarian':''}`;
+  $('#suTab').innerHTML=`<tr style="position:sticky;top:0;background:#f6f7f9">${['No. SU/Tahun','No. Pendaftaran','Peta analog','Status','Luas'].map(h=>`<th style="${tdS}">${h}</th>`).join('')}</tr>`+
+    cocok.slice(0,400).map((r,i)=>`<tr data-i="${baris.indexOf(r)}" style="cursor:pointer"><td style="${tdS}"><b>${esc(r.su||'?')}</b>${r.berkas?`<div style="font-size:11px;color:var(--mut)">${esc(r.berkas)}</div>`:''}</td><td style="${tdS}">${esc(r.no||'?')}</td><td style="${tdS}">${esc(r.peta)}</td><td style="${tdS}"><i class="dot" style="display:inline-block;background:${r.warna}"></i> ${r.st}</td><td style="${tdS}">${r.luas?r.luas+' m²':''}</td></tr>`).join('');
+  $('#suTab').querySelectorAll('tr[data-i]').forEach(tr=>tr.onclick=()=>{const r=baris[+tr.dataset.i];$('#suDlg').hidden=true;
+    if(r.b){S.aktif=r.b.petaId;lsSet('puzzleSU.aktif',S.aktif);renderSel();fokus(r.b)}else if(r.a&&r.a.status!=='proses')bukaEditor(null,'',r.a)})}
+function cekNama(files){const ada=petaSUada(),dipilih=new Map();cekBaru=[];let nSama=0,nTanpa=0;
+  const rows=[...files].map(f=>{const nf=bacaNamaFile(f.name),k=kunciSU(nf.nomor,nf.tahun,f.name),label=nf.nomor?nf.nomor+'/'+nf.tahun:'(nama tidak berpola SU)';
+    let ket,ok=false;if(ada.has(k)){ket='✗ '+ada.get(k);nSama++}else if(dipilih.has(k)){ket='✗ dobel dengan '+dipilih.get(k);nSama++}else{ok=true;dipilih.set(k,f.name);cekBaru.push(f);ket=nf.nomor?'✓ baru':'✓ baru (cek manual: nomor/tahun tidak terbaca dari nama)';if(!nf.nomor)nTanpa++}
+    return{f,label,ket,ok}}).sort((a,b)=>a.ok-b.ok);
+  $('#cekRingkas').innerHTML=`<b>${files.length}</b> file dicek: <b style="color:${COL.landing}">${cekBaru.length} baru</b>, <b style="color:var(--err)">${nSama} sudah ada/dobel</b>${nTanpa?`, ${nTanpa} tanpa pola nama`:''}`;
+  $('#cekTab').innerHTML=rows.map(r=>`<tr><td style="${tdS}"><b>${esc(r.label)}</b><div style="color:var(--mut);font-size:11px">${esc(r.f.name)}</div></td><td style="${tdS};color:${r.ok?COL.landing:'var(--err)'}">${esc(r.ket)}</td></tr>`).join('');
+  const bt=$('#cekMasuk');bt.hidden=!cekBaru.length;bt.textContent=`📥 Masukkan ${cekBaru.length} SU yang baru ke antrian`}
+$('#btnDaftar').onclick=bukaDaftar;$('#suTutup').onclick=()=>$('#suDlg').hidden=true;
+$('#suCari').addEventListener('input',renderDaftar);
+$('#cekPilih').onclick=()=>$('#fCek').click();$('#fCek').onchange=e=>{cekNama(e.target.files);e.target.value=''};
+$('#cekDrop').addEventListener('dragover',e=>e.preventDefault());$('#cekDrop').addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();cekNama(e.dataTransfer.files)});
+$('#cekMasuk').onclick=()=>{const f=cekBaru;cekBaru=[];$('#suDlg').hidden=true;$('#cekTab').innerHTML='';$('#cekRingkas').innerHTML='';$('#cekMasuk').hidden=true;masukkanBanyak(f)};
 
 /* ================= EKSPOR / IMPOR ================= */
 const tgl=()=>new Date().toISOString().slice(0,10);
