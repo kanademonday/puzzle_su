@@ -376,12 +376,13 @@ function jarakBidang(A,B){const a=A.poly.map(q=>keDunia(A,q)),b=B.poly.map(q=>ke
     if(silang(a1,a2,b1,b2))return 0;m=Math.min(m,jtSeg(a1,b1,b2),jtSeg(a2,b1,b2),jtSeg(b1,a1,a2),jtSeg(b2,a1,a2))}}return m}
 function hubung(a,b){if(jarakBidang(a,b)<=TOL_DEMPET)return 'dempet';
   if((a.tetangga||[]).some(t=>norm(t.no)===norm(b.no))||(b.tetangga||[]).some(t=>norm(t.no)===norm(a.no)))return 'su';return null}
-// tingkat 1: menempel bidang sudah landing • tingkat 2: menempel tingkat 1 • tingkat 3: menempel tingkat 2 (berhenti di 3)
+// tingkat 1: menempel bidang sudah landing • tingkat 2: menempel tingkat 1 • tingkat 3: menempel tingkat 2, dan semua yang menyambung terus darinya tetap tingkat 3
 function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'),B=d.filter(b=>b.status!=='landing'),hasil=[],lv1=[];
   const cek=(b,acuan,level)=>{const dempet=[],su=[];for(const l of acuan){const h=hubung(b,l);if(h==='dempet')dempet.push(l);else if(h==='su')su.push(l)}
     if(dempet.length||su.length){hasil.push({b,dempet,su,level});return true}return false};
   B.forEach(b=>{if(cek(b,L,1))lv1.push(b)});const lv2=[];B.forEach(b=>{if(!lv1.includes(b)&&cek(b,lv1,2))lv2.push(b)});
-  B.forEach(b=>{if(!lv1.includes(b)&&!lv2.includes(b))cek(b,lv2,3)});
+  let acuan=lv2;const sdh=new Set([...lv1,...lv2]);
+  while(acuan.length){const baru=[];B.forEach(b=>{if(!sdh.has(b)&&cek(b,acuan,3)){sdh.add(b);baru.push(b)}});acuan=baru}
   const sk=x=>(4-x.level)*100+x.dempet.length*2+x.su.length;return hasil.sort((x,y)=>sk(y)-sk(x))}
 
 /* ================= PUZZLE (kanvas utama) ================= */
@@ -489,7 +490,7 @@ function renderSide(pesan,kosong){
     const n1=k.filter(x=>x.level===1).length,n2=k.filter(x=>x.level===2).length,n3=k.length-n1-n2,wl=l=>l===1?COL.kand:l===2?COL.kand2:COL.kand3;
     h+=`<h3>🎯 Kandidat landing (${k.length})</h3><div class="empty" style="padding:0 0 6px"><i class="dot" style="display:inline-block;background:${COL.kand}"></i> <b>Tingkat 1 (${n1})</b>: menempel langsung dengan bidang sudah landing.<br>
       <i class="dot" style="display:inline-block;background:${COL.kand2}"></i> <b>Tingkat 2 (${n2})</b>: menempel dengan bidang tingkat 1.<br>
-      <i class="dot" style="display:inline-block;background:${COL.kand3}"></i> <b>Tingkat 3 (${n3})</b>: menempel dengan bidang tingkat 2 (paling jauh sampai sini).<br><span style="font-size:11px">Menempel = berdempetan di puzzle, atau bertetangga menurut SU.</span></div>
+      <i class="dot" style="display:inline-block;background:${COL.kand3}"></i> <b>Tingkat 3 (${n3})</b>: menempel dengan bidang tingkat 2, dan semua yang menyambung terus darinya.<br><span style="font-size:11px">Menempel = berdempetan di puzzle, atau bertetangga menurut SU.</span></div>
     <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${wl(x.level)}"></i>${esc(x.b.no)}<small>${x.level>1?'T'+x.level+' lewat ':''}${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
   if(pesan){h+=`<h3>Info</h3><div class="selbox">${pesan}${kosong?`<div style="margin-top:8px"><button class="pri" id="addFor">+ Masukkan SU nomor ${esc(kosong.no)}</button></div>`:''}</div>`}
   if(S.antrian.length){const q=S.antrian;
