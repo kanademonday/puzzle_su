@@ -228,6 +228,10 @@ aside h3:first-child{margin-top:0}
    <button class="pri" id="cekMasuk" style="margin-top:8px" hidden></button><button id="cekMasukAI" style="margin-top:4px" hidden>🤖 Masukkan + baca AI di belakang</button>
   </div>
  </div></div></div>
+<div id="aiBanner" hidden style="position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:25;background:#fff8e6;border:2px solid #f59e0b;border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px #0003;font-size:14px;max-width:92vw;text-align:center">
+ <b>⏳ Kuota AI gratis habis</b><br>Kuota pulih: <b id="bnPulih"></b> &nbsp;•&nbsp; Dicoba lagi: <b id="bnCoba"></b>
+ <div style="font-size:12px;color:var(--mut);margin-top:2px">SU tetap bisa didigitasi. Tambah kunci AI lain (Gemini) agar tidak perlu menunggu.</div>
+ <div style="margin-top:6px"><button id="bnStop">⏹ Hentikan baca AI</button> <button id="bnAI">⚙️ Pengaturan AI</button></div></div>
 <div id="toast"></div>
 
 <script>
@@ -745,7 +749,7 @@ const AI_KUNCI={groq:'gsk_…  (buat gratis di console.groq.com → API Keys)',g
 const AI_BAWAAN={groq:'qwen/qwen3.8-27b',gemini:'gemini-2.5-flash',openrouter:'openrouter/free',ollama:'qwen2.5vl:7b'};
 const GROQ_VISI=[/^qwen\/qwen3\.\d+-27b$/,/qwen.*vl/i,/llama-4-(scout|maverick)/i,/vision/i];
 const AI={keys:{},models:{},url:'http://localhost:11434',aktif:{groq:true,gemini:true,openrouter:true,ollama:false}};
-const penuh={}; // penyedia -> waktu (ms) sampai boleh dicoba lagi
+const penuh={},pulihAI={}; // penuh: kapan dicoba lagi • pulihAI: perkiraan kuota pulih (null = tidak diketahui)
 try{const v=JSON.parse(lsGet('plotkw.ai')||'{}');AI.keys=v.keys||{};AI.models=v.models||{};AI.url=v.url||AI.url;
   const a=JSON.parse(lsGet('puzzleSU.aiAktif')||'null');if(a)Object.assign(AI.aktif,a);else if(v.prov==='ollama')AI.aktif.ollama=true}catch(e){}
 const siapProv=p=>!!AI.aktif[p]&&(p==='ollama'||!!AI.keys[p]);
@@ -787,6 +791,7 @@ function errPenuh(teks,detik){const e=new Error('penuh');e.penuh=true;
   const m=String(teks).match(/try again in\s*(?:(\d+)h)?\s*(?:(\d+)m(?!s))?\s*(?:([\d.]+)s)?/i);
   const dariPesan=m&&(m[1]||m[2]||m[3])?(+(m[1]||0))*3600+(+(m[2]||0))*60+Math.ceil(+(m[3]||0)):0;
   const harian=/per.?day|daily|PerDay|RPD|TPD/i.test(teks);
+  e.pulih=detik||dariPesan||0; // 0 = tidak disebut
   e.tunggu=Math.min(120,Math.max(5,detik||dariPesan||(harian?120:20)));e.harian=harian;return e}
 const ambilObj=c=>JSON.parse(c.slice(c.indexOf('{'),c.lastIndexOf('}')+1));
 const isiPrompt=()=>PROMPT_SU+'\n\nBalas HANYA dengan satu objek JSON yang mengikuti skema ini:\n'+JSON.stringify(SKEMA_SU);
@@ -814,14 +819,12 @@ async function panggilProv(p,b64){
     return ambilObj(j.choices[0].message.content)}
   throw new Error('gagal')}
 async function panggilAI(b64){let adaPenuh=false;
-  for(let putaran=0;putaran<2;putaran++){
-    for(const p of AI_PROV){if(!siapProv(p)||(penuh[p]||0)>Date.now())continue;
-      try{return await panggilProv(p,b64)}
-      catch(e){if(e.penuh)adaPenuh=true;penuh[p]=Date.now()+(e.penuh?e.tunggu*1000:120000);
-        toast(e.penuh?`${AI_NAMA[p]} penuh – pindah ke AI berikutnya…`:`${AI_NAMA[p]}: ${e.message} – pindah ke AI berikutnya…`,2500)}}
-    const sisa=Math.min(...AI_PROV.filter(siapProv).map(p=>(penuh[p]||0)-Date.now()));
-    if(putaran===0&&sisa>0&&sisa<=25000){toast(`Semua AI sedang penuh, menunggu ${Math.ceil(sisa/1000)} detik…`);await tidur(sisa+500);continue}
-    break}
+  for(const p of AI_PROV){if(!siapProv(p)||(penuh[p]||0)>Date.now())continue;
+    try{const r=await panggilProv(p,b64);delete pulihAI[p];return r}
+    catch(e){if(e.penuh){adaPenuh=true;pulihAI[p]=e.pulih?Date.now()+e.pulih*1000:null}
+      penuh[p]=Date.now()+(e.penuh?e.tunggu*1000:120000);
+      if(AI_PROV.filter(siapProv).length>1)toast(e.penuh?`${AI_NAMA[p]} penuh – pindah ke AI berikutnya…`:`${AI_NAMA[p]}: ${e.message} – pindah ke AI berikutnya…`,2500)}}
+  if(AI_PROV.filter(siapProv).some(p=>p in pulihAI))adaPenuh=true;
   throw Object.assign(new Error(adaPenuh?'kuota AI gratis habis sementara':'AI tidak bisa membaca halaman ini'),{kuota:adaPenuh})}
 // Nama file seperti aplikasi landing_otomatis: SU_16010401_00123_1985.pdf
 function bacaNamaFile(n){const nm=n.replace(/\.[^.]+$/,'');
@@ -870,9 +873,11 @@ async function prosesSatu(a){const f=a.f;delete a.f;
 const AIQ={jalan:false,stop:false,tunggu:0,kini:null};
 const tidurSela=async ms=>{const t=Date.now()+ms;while(Date.now()<t&&!AIQ.stop)await tidur(500)};
 async function aiPaksa(gbr){let gagal=0;for(;;){if(AIQ.stop)throw new Error('dihentikan');
-  try{AIQ.tunggu=0;return await panggilAI(gbr)}
+  try{const r=await panggilAI(gbr);AIQ.tunggu=0;AIQ.kuota=false;return r}
   catch(e){if(AIQ.stop)throw e;const ps=AI_PROV.filter(siapProv);if(!ps.length)throw new Error('AI belum diatur');if(!e.kuota&&++gagal>=4)throw e;
-    const sisa=Math.max(5000,Math.min(...ps.map(p=>(penuh[p]||0)-Date.now())));AIQ.tunggu=Date.now()+sisa;renderSide();await tidurSela(sisa)}}}
+    const sisa=Math.max(5000,Math.min(...ps.map(p=>(penuh[p]||0)-Date.now())));AIQ.tunggu=Date.now()+sisa;
+    if(e.kuota){const pl=ps.map(p=>pulihAI[p]);AIQ.kuota=true;AIQ.pulih=pl.some(x=>x==null)&&!pl.some(x=>x)?null:Math.min(...pl.filter(Boolean))}else AIQ.kuota=false;
+    renderSide();await tidurSela(sisa)}}}
 async function bacaAIsatu(a){const hal=a.hal||[a.img];let adaGambar=false,gi=a.gi||0;a.pesan='';
   for(let i=0;i<hal.length;i++){const r=await aiPaksa(b64(await ubahUkuran(hal[i],1600)));
     if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
@@ -891,11 +896,17 @@ async function jalankanAI(){if(AIQ.jalan)return;if(!aiSiap())return toast('AI be
     AIQ.kini=null;if(S.antrian.includes(a))dbPut('antrian',a);renderSide()}
   const dihentikan=AIQ.stop;AIQ.jalan=false;AIQ.stop=false;AIQ.kini=null;AIQ.tunggu=0;renderSide();
   toast(dihentikan?`Baca AI dihentikan (${n} SU selesai). Lanjutkan kapan saja dengan ▶.`:`Baca AI selesai: ${n} SU terbaca.`,5000)}
-function hentikanAI(){AIQ.stop=true;toast('Menghentikan baca AI…',2000)}
+$('#bnStop').onclick=()=>hentikanAI();$('#bnAI').onclick=()=>bukaAI();
+function hentikanAI(){AIQ.stop=true;$('#aiBanner').hidden=true;toast('Menghentikan baca AI…',2000)}
 // Tombol ↻ di kartu antrian: masukkan lagi ke antrian baca AI (kartu tetap bisa didigitasi)
 function bacaUlang(a){if(!a.img)return;if(!aiSiap())return toast('AI belum diatur: Data ▸ Pengaturan baca otomatis',4000);
   Object.assign(a,{luas:0,no:'',sekitar:[],pesan:'',aiTunggu:true});AI_PROV.forEach(p=>{if((penuh[p]||0)-Date.now()<300000)delete penuh[p]});dbPut('antrian',a);renderSide();jalankanAI()}
-setInterval(()=>{const el=document.getElementById('aiCd');if(el){const d=Math.max(0,Math.ceil((AIQ.tunggu-Date.now())/1000));el.textContent=AIQ.tunggu>Date.now()?` • kuota gratis penuh, coba lagi ${Math.floor(d/60)}:${String(d%60).padStart(2,'0')}`:''}},1000);
+const mmss=ms=>{const d=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(d/3600);return(h?h+':'+String(Math.floor(d%3600/60)).padStart(2,'0'):Math.floor(d/60))+':'+String(d%60).padStart(2,'0')};
+// Waktu hanya muncul bila kuota AI gratis memang habis: (1) perkiraan kuota pulih, (2) kapan dicoba lagi
+setInterval(()=>{const now=Date.now(),habis=AIQ.jalan&&AIQ.kuota&&AIQ.tunggu>now;
+  const tPulih=AIQ.pulih?(AIQ.pulih>now?mmss(AIQ.pulih-now):'sebentar lagi'):'belum diketahui (batas harian)',tCoba=mmss(AIQ.tunggu-now);
+  const el=document.getElementById('aiCd');if(el)el.innerHTML=habis?`<br>⏳ kuota habis • pulih: <b>${tPulih}</b> • coba lagi: <b>${tCoba}</b>`:'';
+  const bn=$('#aiBanner');bn.hidden=!habis;if(habis){$('#bnPulih').textContent=tPulih;$('#bnCoba').textContent=tCoba}},1000);
 // Kunci pembeda SU: nomor 5 angka + tahun (nomor sama tapi tahun beda = SU berbeda); tanpa pola di nama file → nama file
 const kunciSU=(su,th,nama)=>su&&th?String(su).padStart(5,'0')+'/'+th:'f:'+String(nama).toLowerCase();
 // Semua SU yang sudah dimasukkan: kunci -> keterangan
