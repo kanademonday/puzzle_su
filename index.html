@@ -425,10 +425,10 @@ function renderSide(pesan,kosong){
   updRot()}
 
 /* ================= EDITOR SU ================= */
-const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null,saran:[],draft:null,stack:[]};
+const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null,saran:[],draft:null,stack:[],hi:0,halState:{}};
 const ecv=$('#ecv'),ectx=ecv.getContext('2d');
 function bukaEditor(b,noAwal,draft){
-  E.open=true;E.b=b;E.draft=draft||null;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
+  E.open=true;E.b=b;E.draft=draft||null;E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
   $('#eTitle').textContent=b?'Edit bidang '+b.no:draft?'Digitasi SU dari antrian – '+draft.nama:'Tambah bidang dari SU';
   const p=b?S.peta.find(x=>x.id===b.petaId):petaAktif();
   $('#fPeta').value=draft&&draft.petaNama?draft.petaNama:p?p.nama:'';$('#fNo').value=b?b.no:draft?(draft.no||''):(noAwal||'');
@@ -441,16 +441,22 @@ function bukaEditor(b,noAwal,draft){
   $('#edrop').hidden=!!(E.imgId||draft);
   const hs=$('#halSel'),hal=draft&&draft.hal;
   hs.innerHTML=hal?'<span style="font-size:12px;color:var(--mut)">Halaman PDF:</span>'+hal.map((_,i)=>`<button type="button" data-h="${i}" class="${i===draft.gi?'on':''}">${i+1}</button>`).join(''):'';
-  hs.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{const i=+bt.dataset.h;draft.gi=i;draft.img=hal[i];hs.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===bt));muatGambar(hal[i],true);dbPut('antrian',draft)});
+  hs.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{pindahHal(+bt.dataset.h);hs.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===bt))});
   renderTet();requestAnimationFrame(()=>{eUkur();if(draft)muatGambar(draft.img,true);if(!E.imgId&&!draft)$('#fPeta').value?$('#fNo').focus():$('#fPeta').focus()})}
+// Pindah halaman PDF: batas, titik tetangga, dan potongan tiap halaman disimpan dulu, dipulihkan saat kembali
+function simpanHal(){E.halState[E.hi]={src:E.img?E.img.src:null,data:E.imgData,poly:E.poly,tet:E.tet,closed:E.closed,stack:E.stack}}
+function pulihkanHal(i){const st=E.halState[i];E.hi=i;E.poly=st.poly;E.tet=st.tet;E.closed=st.closed;E.stack=st.stack;E.imgData=st.data;return st}
+function pindahHal(i){const hal=E.draft&&E.draft.hal;if(!hal||i===E.hi)return;$('#pop').hidden=true;simpanHal();
+  if(E.halState[i]&&E.halState[i].src){const st=pulihkanHal(i);muatGambar(st.src,false)}else{E.hi=i;E.stack=[];muatGambar(hal[i],true)}
+  renderTet();setMode(E.closed?'tet':'batas');eDraw()}
 function tutupEditor(){E.open=false;$('#modal').hidden=true;draw()}
 function muatGambar(data,baru){const im=new Image();im.onload=()=>{E.img=im;if(baru){E.imgData=data;E.poly=[];E.tet=[];E.closed=false;setMode('batas');renderTet()}$('#edrop').hidden=true;eFit()};im.src=data}
 function bacaFile(f){if(!f||!/^image\//.test(f.type))return toast('Berkas harus berupa gambar (JPG/PNG)');const rd=new FileReader();
   rd.onload=()=>{const im=new Image();im.onload=()=>{const M=2200,k=Math.min(1,M/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
     const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);muatGambar(c.toDataURL('image/jpeg',.88),true)};im.src=rd.result};rd.readAsDataURL(f)}
 function setMode(m){E.mode=m;$('#mBatas').classList.toggle('on',m==='batas');$('#mTet').classList.toggle('on',m==='tet');$('#mGeser').classList.toggle('on',m==='geser');$('#mPotong').classList.toggle('on',m==='potong');
-  $('#eHint').innerHTML={batas:'Klik titik-titik sudut batas bidang secara berurutan. Klik titik pertama untuk menutup. Titik yang sudah ada bisa diseret. Roda mouse = zoom, klik kanan/tengah seret = geser.',
-    tet:'Klik di posisi setiap <b>nomor pendaftaran tetangga</b> yang tertulis di sekitar bidang, lalu ketik nomornya. Nomor yang sudah diketik otomatis tersimpan saat kamu klik titik berikutnya (titik tanpa nomor dibuang). Klik tanda yang sudah ada untuk mengubah/menghapus; bisa juga diseret. Kalau tetangganya tidak tertulis, lewati saja.',
+  $('#eHint').innerHTML={batas:'Klik titik-titik sudut batas bidang secara berurutan. Klik titik pertama untuk menutup. Titik yang sudah ada bisa diseret. <b>Klik kanan = batalkan titik terakhir.</b> Roda mouse = zoom, seret dengan klik kanan/tengah = geser.',
+    tet:'Klik di posisi setiap <b>nomor pendaftaran tetangga</b> yang tertulis di sekitar bidang, lalu ketik nomornya. Nomor yang sudah diketik otomatis tersimpan saat kamu klik titik berikutnya (titik tanpa nomor dibuang). Klik tanda yang sudah ada untuk mengubah/menghapus; bisa juga diseret. <b>Klik kanan = batalkan titik tetangga terakhir.</b> Kalau tetangganya tidak tertulis, lewati saja.',
     geser:'Seret gambar untuk menggeser, roda mouse untuk zoom.',
     potong:'Seret kotak di sekitar bidang beserta nomor-nomor tetangganya, lalu lepas: gambar dipotong. ↶ untuk membatalkan potongan.'}[m];eDraw()}
 function eUkur(){const r=ecv.getBoundingClientRect();ecv.width=Math.max(1,r.width*DPR);ecv.height=Math.max(1,r.height*DPR);eDraw()}
@@ -466,6 +472,12 @@ function eDraw(){const c=ectx;c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,ecv.wi
   E.tet.forEach((t,i)=>{const q=i2e([t.x,t.y]);c.fillStyle='#f59e0b';c.beginPath();c.arc(q[0],q[1],6,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();
     c.font='600 12px system-ui';const w=c.measureText(t.no).width;c.fillStyle='#fff8e6f0';c.fillRect(q[0]+9,q[1]-10,w+8,20);c.strokeStyle='#f59e0b';c.lineWidth=1;c.strokeRect(q[0]+9,q[1]-10,w+8,20);c.fillStyle='#7c4a03';c.textAlign='left';c.textBaseline='middle';c.fillText(t.no,q[0]+13,q[1])});
   if(E.drag&&E.drag.m==='crop'){const a=i2e(E.drag.a),b=i2e(E.drag.b);c.setLineDash([6,4]);c.strokeStyle='#e11d48';c.lineWidth=2;c.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);c.setLineDash([])}}
+// Klik kanan (tanpa menyeret) / Ctrl+Z: batalkan titik terakhir di mode yang aktif
+function undoAksi(){const m=E.mode;
+  if(m==='tet'){if(!E.tet.length)return toast('Tidak ada titik tetangga untuk dibatalkan',1500);const t=E.tet.pop();renderTet();eDraw();return toast(`Titik tetangga ${t.no} dibatalkan`,1500)}
+  if(m==='potong')return $('#bUndo').onclick();
+  if(m==='batas'){if(E.closed)E.closed=false;else if(E.poly.length)E.poly.pop();else return toast('Tidak ada titik batas untuk dibatalkan',1500);eDraw()}}
+window.addEventListener('keydown',e=>{if(E.open&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();undoAksi()}});
 function potong(a,b){if(!E.img)return;const W=E.img.width,H=E.img.height;
   let x0=Math.max(0,Math.min(a[0],b[0])),y0=Math.max(0,Math.min(a[1],b[1])),x1=Math.min(W,Math.max(a[0],b[0])),y1=Math.min(H,Math.max(a[1],b[1]));
   if(x1-x0<20||y1-y0<20){eDraw();return toast('Seret kotak yang lebih besar untuk memotong')}
@@ -488,9 +500,9 @@ $('#popOk').onclick=okPop;
 $('#popIn').addEventListener('blur',e=>{const r=e.relatedTarget;if(r&&!$('#pop').contains(r)&&!$('#pop').hidden)okPop()}); // pindah ke isian/tombol lain = OK$('#popIn').addEventListener('keydown',e=>{if(e.key==='Enter')okPop();if(e.key==='Escape')$('#pop').hidden=true});
 $('#popDel').onclick=()=>{if(E.popIdx>=0)E.tet.splice(E.popIdx,1);$('#pop').hidden=true;renderTet();eDraw()};
 ecv.addEventListener('contextmenu',e=>e.preventDefault());
-ecv.addEventListener('pointerdown',e=>{if(!E.img)return;ecv.setPointerCapture(e.pointerId);if(!$('#pop').hidden)okPop(); // nomor yang sudah diketik = OK; kosong = dibuang
+ecv.addEventListener('pointerdown',e=>{if(!E.img)return;ecv.setPointerCapture(e.pointerId);if(!$('#pop').hidden){if(e.button===2){$('#pop').hidden=true;E.drag=null;return}okPop()} // klik kanan = batal; klik lain: diketik = OK, kosong = dibuang
 const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,q=e2i(sx,sy);
-  if(e.button!==0||E.mode==='geser'){E.drag={m:'pan',sx,sy,vx:E.v.x,vy:E.v.y};return}
+  if(e.button!==0||E.mode==='geser'){E.drag={m:'pan',sx,sy,vx:E.v.x,vy:E.v.y,kanan:e.button===2,gerak:false};return}
   if(E.mode==='potong'){E.drag={m:'crop',a:q,b:q};return}
   if(E.mode==='batas'){const i=E.poly.findIndex(p=>{const s=i2e(p);return Math.hypot(s[0]-sx,s[1]-sy)<9});
     if(i===0&&!E.closed&&E.poly.length>=3){E.closed=true;eDraw();toast('Batas bidang tertutup. Lanjut: tandai nomor tetangga.');setMode('tet');return}
@@ -499,9 +511,9 @@ const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,q=e2i
   if(E.mode==='tet'){const i=E.tet.findIndex(t=>{const s=i2e([t.x,t.y]);return Math.hypot(s[0]-sx,s[1]-sy)<10});
     if(i>=0){E.drag={m:'tet',i,sx,sy,gerak:false};return}bukaPop(sx,sy,-1,q)}});
 ecv.addEventListener('pointermove',e=>{if(!E.drag)return;const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,d=E.drag;
-  if(d.m==='pan'){E.v.x=d.vx+sx-d.sx;E.v.y=d.vy+sy-d.sy}else if(d.m==='vtx'){E.poly[d.i]=e2i(sx,sy)}else if(d.m==='crop'){d.b=e2i(sx,sy)}
+  if(d.m==='pan'){if(Math.hypot(sx-d.sx,sy-d.sy)>4)d.gerak=true;E.v.x=d.vx+sx-d.sx;E.v.y=d.vy+sy-d.sy}else if(d.m==='vtx'){E.poly[d.i]=e2i(sx,sy)}else if(d.m==='crop'){d.b=e2i(sx,sy)}
   else if(d.m==='tet'){if(Math.hypot(sx-d.sx,sy-d.sy)>4)d.gerak=true;if(d.gerak){const q=e2i(sx,sy);E.tet[d.i].x=q[0];E.tet[d.i].y=q[1]}}eDraw()});
-ecv.addEventListener('pointerup',e=>{const d=E.drag;E.drag=null;if(d&&d.m==='crop')potong(d.a,d.b);if(d&&d.m==='tet'&&!d.gerak){const r=ecv.getBoundingClientRect();bukaPop(e.clientX-r.left,e.clientY-r.top,d.i)}});
+ecv.addEventListener('pointerup',e=>{const d=E.drag;E.drag=null;if(d&&d.kanan&&!d.gerak)undoAksi();if(d&&d.m==='crop')potong(d.a,d.b);if(d&&d.m==='tet'&&!d.gerak){const r=ecv.getBoundingClientRect();bukaPop(e.clientX-r.left,e.clientY-r.top,d.i)}});
 ecv.addEventListener('wheel',e=>{e.preventDefault();if(!E.img)return;const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,q=e2i(sx,sy);
   E.v.z=Math.min(40,Math.max(.02,E.v.z*(e.deltaY<0?1.15:1/1.15)));E.v.x=sx-q[0]*E.v.z;E.v.y=sy-q[1]*E.v.z;eDraw()},{passive:false});
 $('#mBatas').onclick=()=>setMode('batas');$('#mTet').onclick=()=>setMode('tet');$('#mGeser').onclick=()=>setMode('geser');$('#mPotong').onclick=()=>setMode('potong');
@@ -523,6 +535,8 @@ $('#eCancel').onclick=tutupEditor;
 window.addEventListener('keydown',e=>{if(E.open&&e.key==='Escape'&&$('#pop').hidden)tutupEditor()});
 $('#eSave').onclick=()=>{
   if(!$('#pop').hidden)okPop();
+  if(E.draft&&E.poly.length<3){simpanHal();const k=Object.keys(E.halState).find(i=>E.halState[i].poly.length>=3);
+    if(k!==undefined){pulihkanHal(+k);const st=E.halState[k];E.img=null;const im=new Image();im.src=st.src;E.img=im;E.draft.gi=+k}}
   const nama=$('#fPeta').value.trim(),no=$('#fNo').value.trim();
   if(!nama)return toast('Isi / pilih nama peta analog dulu'),$('#fPeta').focus();
   if(!no)return toast('Isi nomor pendaftaran bidang ini'),$('#fNo').focus();
