@@ -24,7 +24,9 @@ lokasi bidang yang sudah / belum landing di Bhumi ATR. Bahasa UI & jawaban: **Ba
 - EDITOR juga: mode potong (`potong()`, undo via `E.stack`), popup nomor tetangga otomatis OK saat klik tempat lain, chip saran `E.saran`
 - BANYAK SU: `masukkanBanyak()` → `prosesSatu()` (pdf.js, nama file `bacaNamaFile`, AI berantai Groq→Gemini→OpenRouter→Ollama `panggilAI`/`panggilProv`, penyedia penuh dicatat di `penuh{}` lalu pindah; kunci di localStorage `plotkw.ai` (sama dengan landing_otomatis), aktif/nonaktif di `puzzleSU.aiAktif`; `bacaUlang()` tombol ↻)
 - DAFTAR SU: `bukaDaftar()`/`renderDaftar()` (semua bidang + antrian, pencarian), `cekNama()` hanya baca nama file → `#cekMasuk` memasukkan yang baru ke antrian; kunci duplikat dari `petaSUada()`
-- MODE LANDING: `kandidatLanding()` (jarak poligon ≤ `TOL_DEMPET` m atau saling tercatat sebagai tetangga di SU), tombol `#btnLanding`
+- BAYANGAN: nomor tetangga tanpa SU jadi kotak bayangan (`peta.bayangan`, `posKosong()`, `ukuranBayangan()`), ikut disusun di `susunTata` tapi tidak mendorong bidang asli
+- DUPLIKAT SU: `kunciBidang()` (pemisah / \ - . spasi), `kunciSemuaBidang()` (No.SU + nama file + catatan), peringatan saat simpan `E.konfSU`
+- MODE LANDING (tingkat 1 merah muda, tingkat 2 ungu, `hubung()`): `kandidatLanding()` (jarak poligon ≤ `TOL_DEMPET` m atau saling tercatat sebagai tetangga di SU), tombol `#btnLanding`
 - KE AUTOCAD: `lispBidang()` (entmake LWPOLYLINE+TEXT, Y dibalik), `salinGambar()`, `simpanGambar()` (JPG + world file .jgw untuk MAPIINSERT)
 - EKSPOR/IMPOR: JSON cadangan (gabung berdasarkan nomor + `diubah` terbaru), DXF R12 (Y dibalik, meter lokal), CSV, PNG
 

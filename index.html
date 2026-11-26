@@ -236,7 +236,7 @@ const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const norm=n=>String(n||'').toUpperCase().replace(/\s+/g,'');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c'};
+const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c',kand2:'#7c3aed'};
 let toastT;function toast(m,ms=2800){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),ms)}
 function arm(btn,fn,txt='Yakin? klik lagi'){ // konfirmasi 2x klik (tanpa confirm())
   if(btn.dataset.arm){delete btn.dataset.arm;btn.textContent=btn.dataset.o;fn();return}
@@ -284,10 +284,16 @@ function infoTetangga(daftar){ // daftar bidang dalam satu peta
   return{ada,kosong,garis}}
 
 /* Letakkan bidang baru otomatis berdasarkan nomor tetangga */
+/* Bayangan: satu kotak perkiraan untuk tiap nomor tetangga yang belum ada SU-nya (disebut 1 bidang atau lebih) */
+function ukuranBayangan(d){const a=d.map(b=>luasPoly(b.poly)*b.s*b.s).filter(x=>x>0).sort((x,y)=>x-y);return Math.sqrt(a.length?a[a.length>>1]:200)*.8}
+function posKosong(k,gS,peta){const n=k.titik.length,rata=[k.titik.reduce((s,t)=>s+t.w[0],0)/n,k.titik.reduce((s,t)=>s+t.w[1],0)/n];
+  const p=peta||petaAktif(),g=p&&p.bayangan&&p.bayangan[norm(k.no)];
+  if(g&&Math.hypot(g.x-rata[0],g.y-rata[1])<=(gS||20)*4)return[g.x,g.y];return rata}
 function letakkanOtomatis(b,lain){
   const info=infoTetangga(lain);const pts=[];let sumber='';
-  const k=info.kosong.get(norm(b.no));
-  if(k){k.titik.forEach(t=>{const O=t.pemilik;let dx=t.w[0]-O.x,dy=t.w[1]-O.y;const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
+  const k=info.kosong.get(norm(b.no)),pk=S.peta.find(p=>p.id===b.petaId);
+  if(k&&pk&&pk.bayangan&&pk.bayangan[norm(b.no)]){pts.push(posKosong(k,ukuranBayangan(lain),pk));sumber=`menempati kotak bayangan nomor ${b.no}`}
+  else if(k){k.titik.forEach(t=>{const O=t.pemilik;let dx=t.w[0]-O.x,dy=t.w[1]-O.y;const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
       // geser keluar dari bidang pemilik: tepi bidang baru yang menghadap pemilik diletakkan di tanda nomor
       let e=0;b.poly.forEach(q=>{e=Math.max(e,-((q[0]-b.c[0])*dx+(q[1]-b.c[1])*dy)*b.s)});
       pts.push([t.w[0]+dx*e*0.85,t.w[1]+dy*e*0.85])});sumber=`menempati ${k.titik.length} tanda nomor ${b.no}`}
@@ -318,29 +324,38 @@ function mtv(A,pa,B,pb){let best=Infinity,ax=null; // vektor untuk mengeluarkan 
     if(o<best){best=o;const sg=((pb[0]-pa[0])*nx+(pb[1]-pa[1])*ny)<0?-1:1;ax=[nx*sg*o,ny*sg*o]}}
   return ax}
 function susunTata(daftar,bebas){
-  const idx=new Map(daftar.map((b,i)=>[b,i])),per=new Map(daftar.map(b=>[norm(b.no),b]));
-  const G=daftar.map(geomLokal),H=G.map(hull),Rd=G.map(g=>Math.max(...g.map(v=>Math.hypot(v[0],v[1]))));
+  const nReal=daftar.length,petaObj=S.peta.find(p=>p.id===daftar[0]?.petaId),nodes=daftar.map(b=>({b,ghost:false}));
+  const idx=new Map(daftar.map((b,i)=>[norm(b.no),i])),G=daftar.map(geomLokal);
+  // kotak bayangan untuk nomor tetangga yang belum ada SU-nya (ikut disusun, tapi tidak mendorong bidang asli)
+  const gs=ukuranBayangan(daftar),sq=[[-gs/2,-gs/2],[gs/2,-gs/2],[gs/2,gs/2],[-gs/2,gs/2]];
+  daftar.forEach(A=>(A.tetangga||[]).forEach(t=>{const n=norm(t.no);if(!n||idx.has(n))return;idx.set(n,nodes.length);nodes.push({ghost:true,n});G.push(sq)}));
+  const H=G.map(hull),Rd=G.map(g=>Math.max(...g.map(v=>Math.hypot(v[0],v[1]))));
   const sup=(g,u)=>g.reduce((m,v)=>Math.max(m,v[0]*u[0]+v[1]*u[1]),-Infinity);
-  const K=[];
-  daftar.forEach((A,i)=>(A.tetangga||[]).forEach(t=>{const B=per.get(norm(t.no));if(!B||B===A)return;const j=idx.get(B);
+  const K=[],tanda=nodes.map(()=>[]);
+  daftar.forEach((A,i)=>(A.tetangga||[]).forEach(t=>{const j=idx.get(norm(t.no));if(j===undefined||j===i)return;
     const co=Math.cos(A.rot),si=Math.sin(A.rot),mx=(t.x-A.c[0])*A.s,my=(t.y-A.c[1])*A.s,m=[mx*co-my*si,mx*si+my*co],L=Math.hypot(m[0],m[1]);if(L<1e-6)return;
-    const u=[m[0]/L,m[1]/L],jar=sup(G[i],u)+sup(G[j],[-u[0],-u[1]]);K.push({i,j,d:[u[0]*jar,u[1]*jar]})}));
-  const P=daftar.map(b=>[b.x,b.y]),free=daftar.map(b=>bebas.has(b)&&!b.kunci);
-  // tiap kelompok yang saling terhubung butuh satu patokan
-  const adj=daftar.map(()=>[]);K.forEach(k=>{adj[k.i].push(k.j);adj[k.j].push(k.i)});const seen=daftar.map(()=>false);
-  for(let s0=0;s0<daftar.length;s0++){if(seen[s0])continue;const comp=[],st=[s0];seen[s0]=true;
+    const u=[m[0]/L,m[1]/L],jar=sup(G[i],u)+sup(G[j],[-u[0],-u[1]]);K.push({i,j,d:[u[0]*jar,u[1]*jar]});tanda[j].push([A.x+u[0]*jar,A.y+u[1]*jar])}));
+  const lama=(petaObj&&petaObj.bayangan)||{};
+  const P=nodes.map((nd,i)=>{if(!nd.ghost)return[nd.b.x,nd.b.y];const g=lama[nd.n];if(g)return[g.x,g.y];const T=tanda[i];return T.length?[T.reduce((s,p)=>s+p[0],0)/T.length,T.reduce((s,p)=>s+p[1],0)/T.length]:[0,0]});
+  const free=nodes.map(nd=>nd.ghost||(bebas.has(nd.b)&&!nd.b.kunci));
+  // tiap kelompok yang saling terhubung butuh satu patokan (bidang asli)
+  const adj=nodes.map(()=>[]);K.forEach(k=>{adj[k.i].push(k.j);adj[k.j].push(k.i)});const seen=nodes.map(()=>false);
+  for(let s0=0;s0<nReal;s0++){if(seen[s0])continue;const comp=[],st=[s0];seen[s0]=true;
     while(st.length){const x=st.pop();comp.push(x);adj[x].forEach(y=>{if(!seen[y]){seen[y]=true;st.push(y)}})}
-    if(comp.every(x=>free[x])){const a=comp.reduce((a,x)=>adj[x].length>adj[a].length?x:a,comp[0]);free[a]=false}}
-  const IT=400;
+    if(comp.every(x=>free[x])){const re=comp.filter(x=>x<nReal),a=re.reduce((a,x)=>adj[x].length>adj[a].length?x:a,re[0]);free[a]=false}}
+  const IT=400,N=nodes.length;
   for(let n=0;n<IT;n++){
-    if(n<IT-40){const acc=daftar.map(()=>[0,0,0]);
+    if(n<IT-40){const acc=nodes.map(()=>[0,0,0]);
       K.forEach(k=>{acc[k.j][0]+=P[k.i][0]+k.d[0];acc[k.j][1]+=P[k.i][1]+k.d[1];acc[k.j][2]++;acc[k.i][0]+=P[k.j][0]-k.d[0];acc[k.i][1]+=P[k.j][1]-k.d[1];acc[k.i][2]++});
-      for(let i=0;i<P.length;i++)if(free[i]&&acc[i][2]){P[i][0]+=.5*(acc[i][0]/acc[i][2]-P[i][0]);P[i][1]+=.5*(acc[i][1]/acc[i][2]-P[i][1])}}
-    if(n>IT*.35)for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){if(!free[i]&&!free[j])continue;const r=Rd[i]+Rd[j];
+      for(let i=0;i<N;i++)if(free[i]&&acc[i][2]){const w=nodes[i].ghost?1:.5;P[i][0]+=w*(acc[i][0]/acc[i][2]-P[i][0]);P[i][1]+=w*(acc[i][1]/acc[i][2]-P[i][1])}}
+    if(n>IT*.35)for(let i=0;i<N;i++)for(let j=i+1;j<N;j++){if(!free[i]&&!free[j])continue;const r=Rd[i]+Rd[j];
       if(Math.abs(P[i][0]-P[j][0])>r||Math.abs(P[i][1]-P[j][1])>r)continue;const v=mtv(H[i],P[i],H[j],P[j]);if(!v||Math.hypot(v[0],v[1])<.02)continue;
-      if(free[i]&&free[j]){P[i][0]-=v[0]/2;P[i][1]-=v[1]/2;P[j][0]+=v[0]/2;P[j][1]+=v[1]/2}else if(free[j]){P[j][0]+=v[0];P[j][1]+=v[1]}else{P[i][0]-=v[0];P[i][1]-=v[1]}}}
+      const gi=nodes[i].ghost,gj=nodes[j].ghost;
+      if(gi&&!gj){P[i][0]-=v[0];P[i][1]-=v[1]}else if(gj&&!gi){P[j][0]+=v[0];P[j][1]+=v[1]}
+      else if(free[i]&&free[j]){P[i][0]-=v[0]/2;P[i][1]-=v[1]/2;P[j][0]+=v[0]/2;P[j][1]+=v[1]/2}else if(free[j]){P[j][0]+=v[0];P[j][1]+=v[1]}else{P[i][0]-=v[0];P[i][1]-=v[1]}}}
   let n=0;daftar.forEach((b,i)=>{if(free[i]&&Math.hypot(b.x-P[i][0],b.y-P[i][1])>1e-3){b.x=P[i][0];b.y=P[i][1];simpanBidang(b);n++}});
-  return{n,k:K.length,terhubung:new Set(K.flatMap(k=>[daftar[k.i],daftar[k.j]]))}}
+  if(petaObj){petaObj.bayangan={};nodes.forEach((nd,i)=>{if(nd.ghost)petaObj.bayangan[nd.n]={x:+P[i][0].toFixed(3),y:+P[i][1].toFixed(3)}});dbPut('peta',petaObj)}
+  return{n,k:K.length,terhubung:new Set(K.flatMap(k=>[nodes[k.i].b,nodes[k.j].b]).filter(Boolean))}}
 function simpanUndoTata(){S.undoTata=bidangAktif().map(b=>[b,b.x,b.y,b.rot])}
 function batalTata(){if(!S.undoTata)return;S.undoTata.forEach(([b,x,y,r])=>{b.x=x;b.y=y;b.rot=r;simpanBidang(b)});S.undoTata=null;renderSide();draw();toast('Susunan dikembalikan seperti sebelumnya',2500)}
 /* Kembalikan satu bidang ke posisi perkiraan (bidang lain jadi patokan) */
@@ -359,12 +374,14 @@ function jarakBidang(A,B){const a=A.poly.map(q=>keDunia(A,q)),b=B.poly.map(q=>ke
   if(a.some(p=>diDalam(p,b))||b.some(p=>diDalam(p,a)))return 0;let m=Infinity;
   for(let i=0;i<a.length;i++){const a1=a[i],a2=a[(i+1)%a.length];for(let j=0;j<b.length;j++){const b1=b[j],b2=b[(j+1)%b.length];
     if(silang(a1,a2,b1,b2))return 0;m=Math.min(m,jtSeg(a1,b1,b2),jtSeg(a2,b1,b2),jtSeg(b1,a1,a2),jtSeg(b2,a1,a2))}}return m}
-function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'),hasil=[];
-  for(const b of d){if(b.status==='landing')continue;const dempet=[],su=[];
-    for(const l of L){if(jarakBidang(b,l)<=TOL_DEMPET)dempet.push(l);
-      else if((b.tetangga||[]).some(t=>norm(t.no)===norm(l.no))||(l.tetangga||[]).some(t=>norm(t.no)===norm(b.no)))su.push(l)}
-    if(dempet.length||su.length)hasil.push({b,dempet,su})}
-  return hasil.sort((x,y)=>(y.dempet.length*2+y.su.length)-(x.dempet.length*2+x.su.length))}
+function hubung(a,b){if(jarakBidang(a,b)<=TOL_DEMPET)return 'dempet';
+  if((a.tetangga||[]).some(t=>norm(t.no)===norm(b.no))||(b.tetangga||[]).some(t=>norm(t.no)===norm(a.no)))return 'su';return null}
+// tingkat 1: menempel bidang sudah landing • tingkat 2: menempel bidang tingkat 1
+function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'),B=d.filter(b=>b.status!=='landing'),hasil=[],lv1=[];
+  const cek=(b,acuan,level)=>{const dempet=[],su=[];for(const l of acuan){const h=hubung(b,l);if(h==='dempet')dempet.push(l);else if(h==='su')su.push(l)}
+    if(dempet.length||su.length){hasil.push({b,dempet,su,level});return true}return false};
+  B.forEach(b=>{if(cek(b,L,1))lv1.push(b)});B.forEach(b=>{if(!lv1.includes(b))cek(b,lv1,2)});
+  const sk=x=>(x.level===1?100:0)+x.dempet.length*2+x.su.length;return hasil.sort((x,y)=>sk(y)-sk(x))}
 
 /* ================= PUZZLE (kanvas utama) ================= */
 const cv=$('#cv'),ctx=cv.getContext('2d');let DPR=1;
@@ -382,11 +399,11 @@ function draw(){
   const daftar=bidangAktif();$('#welcome').hidden=daftar.length>0;
   if(!daftar.length)return;
   const v=S.view,urut=[...daftar].sort((a,b)=>(a===S.sel)-(b===S.sel));
-  const kand=S.modeLanding?kandidatLanding():null,kSet=kand?new Set(kand.map(k=>k.b)):null;
+  const kand=S.modeLanding?kandidatLanding():null,kMap=kand?new Map(kand.map(k=>[k.b,k.level])):null,wK=kd=>kd===1?COL.kand:COL.kand2;
   for(const b of urut){
     ctx.setTransform(DPR*v.z,0,0,DPR*v.z,DPR*v.x,DPR*v.y);
     ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.rot);ctx.scale(b.s,b.s);ctx.translate(-b.c[0],-b.c[1]);
-    const kd=kSet&&kSet.has(b),redup=kSet&&b.status!=='landing'&&!kd,warna=kd?COL.kand:COL[b.status];if(redup)ctx.globalAlpha=.2;
+    const kd=kMap&&kMap.get(b),redup=kMap&&b.status!=='landing'&&!kd,warna=kd?wK(kd):COL[b.status];if(redup)ctx.globalAlpha=.2;
     pathPoly(ctx,b.poly);const im=S.opt.img?ambilGambar(b.img):null;
     if(im){ctx.save();ctx.clip();ctx.globalAlpha=S.opt.alpha*(redup?.2:1);ctx.drawImage(im,0,0);ctx.restore()}
     ctx.fillStyle=warna+(im?(kd?'40':'26'):'55');ctx.fill();
@@ -397,11 +414,15 @@ function draw(){
   if(S.opt.garis){ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.strokeStyle='#2563eb88';
     info.garis.forEach(g=>{const a=w2s(g.w),c=w2s([g.ke.x,g.ke.y]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(c[0],c[1]);ctx.stroke()});ctx.setLineDash([])}
   // tanda nomor tetangga yang belum ada SU
-  info.kosong.forEach(k=>k.titik.forEach(t=>{const s=w2s(t.w);ctx.setLineDash([3,3]);ctx.strokeStyle=COL.kosong;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(s[0],s[1],15,0,7);ctx.stroke();ctx.setLineDash([]);
-    label(k.no,s[0],s[1],'#4b5160','#f1f2f4e6',11,false)}));
+  const gS=ukuranBayangan(daftar);
+  info.kosong.forEach(k=>{const s=w2s(posKosong(k,gS)),h=gS*v.z/2;
+    if(S.opt.garis){ctx.setLineDash([2,4]);ctx.strokeStyle='#8a8f9888';ctx.lineWidth=1;k.titik.forEach(t=>{const a=w2s(t.w);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(s[0],s[1]);ctx.stroke()})}
+    ctx.setLineDash([5,4]);ctx.strokeStyle=COL.kosong;ctx.lineWidth=1.5;ctx.fillStyle='#e9ebef66';ctx.beginPath();
+    if(h>16)ctx.rect(s[0]-h,s[1]-h,2*h,2*h);else ctx.arc(s[0],s[1],15,0,7);ctx.fill();ctx.stroke();ctx.setLineDash([]);
+    label(k.no,s[0],s[1],'#4b5160','#f1f2f4e6',11,false)});
   // nomor pendaftaran tiap bidang
-  for(const b of urut){const s=w2s([b.x,b.y]),kd=kSet&&kSet.has(b);if(kSet&&b.status!=='landing'&&!kd)ctx.globalAlpha=.35;
-    label(b.no,s[0],s[1],'#fff',(b===S.sel?COL.sel:kd?COL.kand:COL[b.status])+'f0',13);ctx.globalAlpha=1}
+  for(const b of urut){const s=w2s([b.x,b.y]),kd=kMap&&kMap.get(b);if(kMap&&b.status!=='landing'&&!kd)ctx.globalAlpha=.35;
+    label(b.no,s[0],s[1],'#fff',(b===S.sel?COL.sel:kd?wK(kd):COL[b.status])+'f0',13);ctx.globalAlpha=1}
   // tetangga yang dicatat dari SU bidang terpilih (termasuk yang sudah didigitasi)
   if(S.sel&&daftar.includes(S.sel))(S.sel.tetangga||[]).forEach(t=>{const s=w2s(keDunia(S.sel,[t.x,t.y]));
     ctx.fillStyle='#f59e0b';ctx.beginPath();ctx.arc(s[0],s[1],5,0,7);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();label(t.no,s[0],s[1]-15,'#7c4a03','#fff3d6f2',12)});
@@ -411,14 +432,15 @@ function draw(){
 }
 function fit(){const d=bidangAktif();if(!d.length){S.view={x:cv.clientWidth/2,y:cv.clientHeight/2,z:1};draw();return}
   let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;const add=w=>{x0=Math.min(x0,w[0]);y0=Math.min(y0,w[1]);x1=Math.max(x1,w[0]);y1=Math.max(y1,w[1])};
-  d.forEach(b=>b.poly.forEach(q=>add(keDunia(b,q))));infoTetangga(d).kosong.forEach(k=>k.titik.forEach(t=>add(t.w)));
+  d.forEach(b=>b.poly.forEach(q=>add(keDunia(b,q))));{const gS=ukuranBayangan(d);infoTetangga(d).kosong.forEach(k=>add(posKosong(k,gS)))}
   const W=cv.clientWidth,H=cv.clientHeight,pad=60,z=Math.min((W-pad*2)/Math.max(x1-x0,1),(H-pad*2)/Math.max(y1-y0,1));
   S.view={z,x:W/2-(x0+x1)/2*z,y:H/2-(y0+y1)/2*z};draw()}
 function fokus(b){S.sel=b;const W=cv.clientWidth,H=cv.clientHeight;S.view.x=W/2-b.x*S.view.z;S.view.y=H/2-b.y*S.view.z;renderSide();draw()}
 function zoomDi(f,sx,sy){const w=s2w(sx,sy);S.view.z=Math.min(200,Math.max(.01,S.view.z*f));S.view.x=sx-w[0]*S.view.z;S.view.y=sy-w[1]*S.view.z;draw()}
 function hit(w){const d=bidangAktif();if(S.sel&&d.includes(S.sel)&&diDalam(keLokal(S.sel,w),S.sel.poly))return S.sel;
   for(let i=d.length-1;i>=0;i--)if(diDalam(keLokal(d[i],w),d[i].poly))return d[i];return null}
-function hitKosong(w){let best=null,bd=18/S.view.z;infoTetangga(bidangAktif()).kosong.forEach(k=>k.titik.forEach(t=>{const d=Math.hypot(t.w[0]-w[0],t.w[1]-w[1]);if(d<bd){bd=d;best=k}}));return best}
+function hitKosong(w){const d0=bidangAktif(),gS=ukuranBayangan(d0);let best=null,bd=Math.max(18/S.view.z,gS/2);
+  infoTetangga(d0).kosong.forEach(k=>{const p=posKosong(k,gS),d=Math.max(Math.abs(p[0]-w[0]),Math.abs(p[1]-w[1]));if(d<bd){bd=d;best=k}});return best}
 function snap(b){if(!S.opt.snap)return false;const T=12/S.view.z;let best=null,bd=T;const mine=b.poly.map(q=>keDunia(b,q));
   bidangAktif().forEach(o=>{if(o===b)return;o.poly.forEach(q=>{const u=keDunia(o,q);mine.forEach(m=>{const d=Math.hypot(u[0]-m[0],u[1]-m[1]);if(d<bd){bd=d;best=[u[0]-m[0],u[1]-m[1]]}})})});
   if(best){b.x+=best[0];b.y+=best[1];return true}return false}
@@ -463,13 +485,16 @@ function renderSide(pesan,kosong){
   h+=`<div class="stats"><div class="stat"><b>${d.length}</b><span>bidang</span></div><div class="stat"><b style="color:${COL.landing}">${nL}</b><span>sudah landing</span></div><div class="stat"><b style="color:${COL.belum}">${d.length-nL}</b><span>belum landing</span></div></div>`;
   h+=`<div class="legend"><span><i class="dot" style="background:${COL.landing}"></i>Sudah landing</span><span><i class="dot" style="background:${COL.belum}"></i>Belum landing</span><span><i class="dot" style="border:2px dashed ${COL.kosong}"></i>Tetangga belum ada SU</span></div>`;
   if(S.modeLanding){const k=kandidatLanding();
-    h+=`<h3>🎯 Kandidat landing (${k.length})</h3><div class="empty" style="padding:0 0 6px">Bidang <b>belum landing</b> yang menempel dengan bidang <b>sudah landing</b> (berdempetan di puzzle, atau bertetangga menurut SU).</div>
-    <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${COL.kand}"></i>${esc(x.b.no)}<small>${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
+    const n1=k.filter(x=>x.level===1).length;
+    h+=`<h3>🎯 Kandidat landing (${k.length})</h3><div class="empty" style="padding:0 0 6px"><i class="dot" style="display:inline-block;background:${COL.kand}"></i> <b>Tingkat 1 (${n1})</b>: menempel langsung dengan bidang sudah landing.<br>
+      <i class="dot" style="display:inline-block;background:${COL.kand2}"></i> <b>Tingkat 2 (${k.length-n1})</b>: menempel dengan bidang tingkat 1.<br><span style="font-size:11px">Menempel = berdempetan di puzzle, atau bertetangga menurut SU.</span></div>
+    <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${x.level===1?COL.kand:COL.kand2}"></i>${esc(x.b.no)}<small>${x.level===2?'lewat ':''}${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
   if(pesan){h+=`<h3>Info</h3><div class="selbox">${pesan}${kosong?`<div style="margin-top:8px"><button class="pri" id="addFor">+ Masukkan SU nomor ${esc(kosong.no)}</button></div>`:''}</div>`}
   if(S.antrian.length){const q=S.antrian;
     const kurang=q.filter(a=>a.status!=='proses'&&(a.pesan||!a.luas));
+    const sdh=new Map();S.bidang.forEach(b=>kunciSemuaBidang(b).forEach(k=>sdh.set(k,b.no)));const dob=a=>sdh.get(kunciSU(a.su,a.tahun,a.nama));
     h+=`<h3>Antrian SU (${q.length})</h3>${kurang.length&&aiSiap()?`<button id="qUlang" style="width:100%;margin-bottom:6px">↻ Baca ulang ${kurang.length} SU yang belum lengkap</button>`:''}<div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
-      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':'✓ siap digitasi'}</span>${a.status!=='proses'&&a.pesan?`<br><span class="bdg" style="background:#fff1d6" title="${esc(a.pesan)}">⚠ luas/nomor belum terbaca</span>`:''}</div>
+      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':'✓ siap digitasi'}</span>${dob(a)?`<br><span class="bdg" style="background:#ffd6e0;color:#a61e4d">⚠ sudah jadi bidang ${esc(dob(a))} – buang ✕</span>`:''}${a.status!=='proses'&&a.pesan?`<br><span class="bdg" style="background:#fff1d6" title="${esc(a.pesan)}">⚠ luas/nomor belum terbaca</span>`:''}</div>
       ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button><button class="x" style="right:30px" data-qr="${a.id}" title="Baca ulang otomatis">↻</button>`:''}</div>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="oLanjut" ${S.opt.lanjut?'checked':''}> Setelah simpan, langsung buka SU berikutnya</label>`}
   if(S.sel&&d.includes(S.sel)){const b=S.sel;
@@ -531,7 +556,7 @@ function renderSide(pesan,kosong){
   on('sDel','click',e=>arm(e.target,()=>{const b=S.sel;dbDel('bidang',b.id);dbDel('img',b.img);S.bidang=S.bidang.filter(x=>x!==b);S.sel=null;renderSide();draw();toast('Bidang '+b.no+' dihapus')}));
   on('cari','input',e=>{S.cari=e.target.value;const pos=e.target.selectionStart;renderSide();const c=$('#cari');c.focus();c.setSelectionRange(pos,pos)});
   side.querySelectorAll('.it[data-id]').forEach(el=>el.addEventListener('click',()=>{const b=S.bidang.find(x=>x.id===el.dataset.id);if(b)fokus(b)}));
-  side.querySelectorAll('.it[data-k]').forEach(el=>el.addEventListener('click',()=>{const k=infoTetangga(bidangAktif()).kosong.get(el.dataset.k);if(!k)return;const t=k.titik[0].w;
+  side.querySelectorAll('.it[data-k]').forEach(el=>el.addEventListener('click',()=>{const k=infoTetangga(bidangAktif()).kosong.get(el.dataset.k);if(!k)return;const t=posKosong(k,ukuranBayangan(bidangAktif()));
     S.view.x=cv.clientWidth/2-t[0]*S.view.z;S.view.y=cv.clientHeight/2-t[1]*S.view.z;tawarKosong(k)}));
   on('oImg','change',e=>{S.opt.img=e.target.checked;draw()});on('oGar','change',e=>{S.opt.garis=e.target.checked;draw()});on('oSnap','change',e=>{S.opt.snap=e.target.checked});
   on('oAl','input',e=>{S.opt.alpha=+e.target.value;draw()});
@@ -541,7 +566,7 @@ function renderSide(pesan,kosong){
 const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null,saran:[],draft:null,stack:[],hi:0,halState:{}};
 const ecv=$('#ecv'),ectx=ecv.getContext('2d');
 function bukaEditor(b,noAwal,draft){
-  E.open=true;E.b=b;E.draft=draft||null;E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
+  E.open=true;E.b=b;E.draft=draft||null;E.konfSU=null;E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
   $('#eTitle').textContent=b?'Edit bidang '+b.no:draft?'Digitasi SU dari antrian – '+draft.nama:'Tambah bidang dari SU';
   const p=b?S.peta.find(x=>x.id===b.petaId):petaAktif();
   $('#fPeta').value=draft&&draft.petaNama?draft.petaNama:p?p.nama:'';$('#fNo').value=b?b.no:draft?(draft.no||''):(noAwal||'');
@@ -653,6 +678,8 @@ $('#eSave').onclick=()=>{
   const nama=$('#fPeta').value.trim(),no=$('#fNo').value.trim();
   if(!nama)return toast('Isi / pilih nama peta analog dulu'),$('#fPeta').focus();
   if(!no)return toast('Isi nomor pendaftaran bidang ini'),$('#fNo').focus();
+  const kSU=kunciBidang({su:$('#fSu').value})||(E.draft&&E.draft.su?kunciSU(E.draft.su,E.draft.tahun,''):null),lainSU=kSU&&S.bidang.find(x=>x!==E.b&&kunciSemuaBidang(x).has(kSU));
+  if(lainSU&&E.konfSU!==kSU){E.konfSU=kSU;return toast(`SU ${kSU} sudah jadi bidang ${lainSU.no}. Klik Simpan sekali lagi bila tetap ingin menyimpan.`,7000)}
   if(!E.img)return toast('Pilih gambar SU dulu');
   if(E.poly.length<3)return toast('Tandai batas bidang (minimal 3 titik) atau klik “Seluruh gambar”');
   const p=petaDariNama(nama);
@@ -776,7 +803,7 @@ async function panggilAI(b64){
 function bacaNamaFile(n){const nm=n.replace(/\.[^.]+$/,'');
   const m=nm.match(/(?:^|[^A-Za-z])(SU|GS)[_\s-]?(\d{8})[_\s-]?(\d{1,6})[_\s-]?(\d{4})(?!\d)/i);
   if(m)return{nomor:m[3].padStart(5,'0'),tahun:m[4]}; // 5 angka belakang + tahun, mis. 02201/1992
-  const m2=nm.match(/(?:SU|GS)[_\s.-]*(\d{1,6})[_\s/.-]+(\d{4})(?!\d)/i);if(m2)return{nomor:m2[1].padStart(5,'0'),tahun:m2[2]};return{}}
+  const m2=nm.match(/(?:SU|GS)[_\s.-]*(\d{1,6})[_\s/\\.-]+(\d{4})(?!\d)/i);if(m2)return{nomor:m2[1].padStart(5,'0'),tahun:m2[2]};return{}}
 const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/';let PDFJS=null;
 async function muatPdfjs(){if(PDFJS)return PDFJS;try{PDFJS=await import(PDFJS_URL+'pdf.min.mjs')}catch(e){throw new Error('Pembaca PDF gagal dimuat (butuh internet)')}
   PDFJS.GlobalWorkerOptions.workerSrc=PDFJS_URL+'pdf.worker.min.mjs';return PDFJS}
@@ -834,9 +861,11 @@ function bacaUlang(a){if(!a.img)return;const hal=a.hal||[a.img],nf=bacaNamaFile(
 const kunciSU=(su,th,nama)=>su&&th?String(su).padStart(5,'0')+'/'+th:'f:'+String(nama).toLowerCase();
 // Semua SU yang sudah dimasukkan: kunci -> keterangan
 function petaSUada(){const ada=new Map(),np=id=>S.peta.find(p=>p.id===id)?.nama||'?';
-  S.bidang.forEach(b=>{const t=`sudah jadi bidang ${b.no} (${np(b.petaId)})`,k=kunciBidang(b);if(k)ada.set(k,t);if(b.berkas)ada.set('f:'+b.berkas.toLowerCase(),t)});
+  S.bidang.forEach(b=>{const t=`sudah jadi bidang ${b.no} (${np(b.petaId)})`;kunciSemuaBidang(b).forEach(k=>ada.set(k,t))});
   S.antrian.forEach(a=>{if(!ada.has(kunciSU(a.su,a.tahun,a.nama)))ada.set(kunciSU(a.su,a.tahun,a.nama),'sudah di antrian')});return ada}
-function kunciBidang(b){const m=String(b.su||'').match(/(\d{1,6})\s*\/\s*(\d{4})/);return m?m[1].padStart(5,'0')+'/'+m[2]:null}
+function kunciBidang(b){const m=String(b.su||'').match(/(\d{1,6})\s*[\/\\|_.,\s-]\s*((?:19|20)\d{2})(?!\d)/);return m?m[1].padStart(5,'0')+'/'+m[2]:null}
+function kunciSemuaBidang(b){const ks=new Set(),k=kunciBidang(b);if(k)ks.add(k);
+  [b.berkas,b.catatan].forEach(n=>{if(!n)return;const nf=bacaNamaFile(String(n));if(nf.nomor)ks.add(nf.nomor+'/'+nf.tahun)});if(b.berkas)ks.add('f:'+b.berkas.toLowerCase());return ks}
 $('#btnBanyak').onclick=()=>$('#fBanyak').click();
 $('#fBanyak').onchange=e=>{masukkanBanyak(e.target.files);e.target.value=''};
 $('#stage').addEventListener('dragover',e=>e.preventDefault());
@@ -928,7 +957,7 @@ $('#fImport').onchange=e=>{if(e.target.files[0])imporJSON(e.target.files[0]);e.t
 const _put=simpanBidang;simpanBidang=function(b){b.diubah=Date.now();_put(b)};
 $('#btnAdd').onclick=()=>bukaEditor(null);
 $('#btnLanding').onclick=()=>{S.modeLanding=!S.modeLanding;$('#btnLanding').classList.toggle('on',S.modeLanding);renderSide();draw();
-  if(S.modeLanding){const k=kandidatLanding();toast(k.length?`${k.length} bidang belum landing menempel dengan yang sudah landing (warna merah muda)`:'Belum ada bidang belum landing yang menempel dengan bidang sudah landing',4000)}};
+  if(S.modeLanding){const k=kandidatLanding();toast(k.length?`${k.filter(x=>x.level===1).length} kandidat tingkat 1 (merah muda) dan ${k.filter(x=>x.level===2).length} tingkat 2 (ungu)`:'Belum ada bidang belum landing yang menempel dengan bidang sudah landing',4000)}};
 $('#petaSel').onchange=e=>{S.aktif=e.target.value;S.sel=null;lsSet('puzzleSU.aktif',S.aktif);renderSide();fit()};
 $('#tFit').onclick=fit;$('#tIn').onclick=()=>zoomDi(1.3,cv.clientWidth/2,cv.clientHeight/2);$('#tOut').onclick=()=>zoomDi(1/1.3,cv.clientWidth/2,cv.clientHeight/2);
 $('#btnSide').onclick=()=>$('#side').classList.toggle('open');
