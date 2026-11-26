@@ -782,7 +782,12 @@ async function tesProv(p){
   if(p==='openrouter')await ambilJSONurl('https://openrouter.ai/api/v1/key',{headers:{Authorization:'Bearer '+AI.keys.openrouter}});
   const m=await cariModel(p);if(!m)return p==='ollama'?'⚠ belum ada model pembaca gambar. Jalankan: ollama pull '+AI_BAWAAN.ollama:'⚠ model pembaca gambar tidak ditemukan';
   if(!AI.models[p]||p!=='ollama'){AI.models[p]=AI.models[p]||m;simpanAI()}return '✅ siap ('+aiModel(p)+')'}
-function errPenuh(teks,detik){const e=new Error('penuh');e.penuh=true;const h=/per.?day|daily|PerDay|RPD|TPD/i.test(teks);e.tunggu=detik||(h?1800:60);return e}
+// Lama tunggu saat kuota penuh: pakai waktu dari pesan AI ("try again in 1m30s"), tapi dicoba lagi paling lambat tiap 2 menit
+function errPenuh(teks,detik){const e=new Error('penuh');e.penuh=true;
+  const m=String(teks).match(/try again in\s*(?:(\d+)h)?\s*(?:(\d+)m(?!s))?\s*(?:([\d.]+)s)?/i);
+  const dariPesan=m&&(m[1]||m[2]||m[3])?(+(m[1]||0))*3600+(+(m[2]||0))*60+Math.ceil(+(m[3]||0)):0;
+  const harian=/per.?day|daily|PerDay|RPD|TPD/i.test(teks);
+  e.tunggu=Math.min(120,Math.max(5,detik||dariPesan||(harian?120:20)));e.harian=harian;return e}
 const ambilObj=c=>JSON.parse(c.slice(c.indexOf('{'),c.lastIndexOf('}')+1));
 const isiPrompt=()=>PROMPT_SU+'\n\nBalas HANYA dengan satu objek JSON yang mengikuti skema ini:\n'+JSON.stringify(SKEMA_SU);
 async function kirim(u,o){try{return await fetch(u,o)}catch(e){throw new Error('tidak terhubung')}}
