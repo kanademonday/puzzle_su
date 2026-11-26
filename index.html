@@ -182,6 +182,7 @@ aside h3:first-child{margin-top:0}
       <button id="bFull" type="button">Seluruh gambar</button>
       <div class="sep"></div>
       <button id="bEFit" type="button">⤢</button>
+      <span id="halSel" style="display:flex;gap:4px;align-items:center"></span>
     </div>
     <div id="ewrap">
       <canvas id="ecv"></canvas>
@@ -373,7 +374,7 @@ function renderSide(pesan,kosong){
   if(pesan){h+=`<h3>Info</h3><div class="selbox">${pesan}${kosong?`<div style="margin-top:8px"><button class="pri" id="addFor">+ Masukkan SU nomor ${esc(kosong.no)}</button></div>`:''}</div>`}
   if(S.antrian.length){const q=S.antrian;
     h+=`<h3>Antrian SU (${q.length})</h3><div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
-      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':a.pesan?'⚠ '+esc(a.pesan):'siap digitasi'}</span></div>
+      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':a.pesan?'⚠ '+esc(a.pesan):'siap digitasi'}</span></div>
       ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button>`:''}</div>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="oLanjut" ${S.opt.lanjut?'checked':''}> Setelah simpan, langsung buka SU berikutnya</label>`}
   if(S.sel&&d.includes(S.sel)){const b=S.sel;
@@ -432,12 +433,15 @@ function bukaEditor(b,noAwal,draft){
   const p=b?S.peta.find(x=>x.id===b.petaId):petaAktif();
   $('#fPeta').value=draft&&draft.petaNama?draft.petaNama:p?p.nama:'';$('#fNo').value=b?b.no:draft?(draft.no||''):(noAwal||'');
   $('#fLuas').value=b&&b.luas?b.luas:draft&&draft.luas?draft.luas:'';$('#fNib').value=b?.nib||'';
-  $('#fSu').value=b?.su||(draft&&draft.su?`SU ${draft.su}${draft.tahun?'/'+draft.tahun:''}`:'');$('#fCat').value=b?.catatan||(draft?draft.nama:'');
+  $('#fSu').value=b?.su||(draft&&draft.su?`${draft.su}${draft.tahun?'/'+draft.tahun:''}`:'');$('#fCat').value=b?.catatan||(draft?draft.nama:'');
   document.querySelector(`input[name=fSt][value=${b?.status==='landing'?'landing':'belum'}]`).checked=true;
   E.poly=b?b.poly.map(q=>[...q]):[];E.tet=b?(b.tetangga||[]).map(t=>({...t})):[];E.closed=E.poly.length>=3;E.imgId=b?.img||null;E.imgData=null;E.img=null;
   setMode(E.poly.length>=3?'tet':'batas');$('#pop').hidden=true;
   if(E.imgId){dbGet('img',E.imgId).then(r=>{if(r)muatGambar(r.data,false)})}
   $('#edrop').hidden=!!(E.imgId||draft);
+  const hs=$('#halSel'),hal=draft&&draft.hal;
+  hs.innerHTML=hal?'<span style="font-size:12px;color:var(--mut)">Halaman PDF:</span>'+hal.map((_,i)=>`<button type="button" data-h="${i}" class="${i===draft.gi?'on':''}">${i+1}</button>`).join(''):'';
+  hs.querySelectorAll('button').forEach(bt=>bt.onclick=()=>{const i=+bt.dataset.h;draft.gi=i;draft.img=hal[i];hs.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===bt));muatGambar(hal[i],true);dbPut('antrian',draft)});
   renderTet();requestAnimationFrame(()=>{eUkur();if(draft)muatGambar(draft.img,true);if(!E.imgId&&!draft)$('#fPeta').value?$('#fNo').focus():$('#fPeta').focus()})}
 function tutupEditor(){E.open=false;$('#modal').hidden=true;draw()}
 function muatGambar(data,baru){const im=new Image();im.onload=()=>{E.img=im;if(baru){E.imgData=data;E.poly=[];E.tet=[];E.closed=false;setMode('batas');renderTet()}$('#edrop').hidden=true;eFit()};im.src=data}
@@ -607,8 +611,8 @@ async function panggilAI(b64){
 // Nama file seperti aplikasi landing_otomatis: SU_16010401_00123_1985.pdf
 function bacaNamaFile(n){const nm=n.replace(/\.[^.]+$/,'');
   const m=nm.match(/(?:^|[^A-Za-z])(SU|GS)[_\s-]?(\d{8})[_\s-]?(\d{1,6})[_\s-]?(\d{4})(?!\d)/i);
-  if(m)return{nomor:String(+m[3]),tahun:m[4]};
-  const m2=nm.match(/(?:SU|GS)[_\s.-]*(\d{1,6})[_\s/.-]+(\d{4})(?!\d)/i);if(m2)return{nomor:String(+m2[1]),tahun:m2[2]};return{}}
+  if(m)return{nomor:m[3].padStart(5,'0'),tahun:m[4]}; // 5 angka belakang + tahun, mis. 02201/1992
+  const m2=nm.match(/(?:SU|GS)[_\s.-]*(\d{1,6})[_\s/.-]+(\d{4})(?!\d)/i);if(m2)return{nomor:m2[1].padStart(5,'0'),tahun:m2[2]};return{}}
 const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/';let PDFJS=null;
 async function muatPdfjs(){if(PDFJS)return PDFJS;try{PDFJS=await import(PDFJS_URL+'pdf.min.mjs')}catch(e){throw new Error('Pembaca PDF gagal dimuat (butuh internet)')}
   PDFJS.GlobalWorkerOptions.workerSrc=PDFJS_URL+'pdf.worker.min.mjs';return PDFJS}
@@ -632,17 +636,18 @@ function masukkanBanyak(files){const arr=[...files].filter(f=>/^image\//.test(f.
 async function prosesSatu(a){const f=a.f;delete a.f;
   try{let hal=[],pdf=null;
     if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){const lib=await muatPdfjs();pdf=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
-      for(let i=1;i<=Math.min(pdf.numPages,6);i++)hal.push(await renderHalaman(pdf,i,1600))}
-    else hal=[await ubahUkuran(await keDataURL(f),1600)];
-    let gi=hal.length-1,adaGambar=false;
-    if(aiSiap()){for(let i=0;i<hal.length;i++){try{const r=await panggilAI(b64(hal[i]));
+      for(let i=1;i<=Math.min(pdf.numPages,6);i++)hal.push(await renderHalaman(pdf,i,2200))}
+    else hal=[await ubahUkuran(await keDataURL(f),2200,.88)];
+    // format SU biasa: hal 1 isian, hal 2 gambar, hal 3 pengesahan
+    let gi=hal.length>=2?1:0,adaGambar=false;
+    if(aiSiap()){for(let i=0;i<hal.length;i++){try{const r=await panggilAI(b64(await ubahUkuran(hal[i],1600)));
         if(r.nomor_surat_ukur&&!a.su)a.su=String(r.nomor_surat_ukur).trim();if(r.tahun&&!a.tahun)a.tahun=String(r.tahun).trim();
         if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
         const gb=r.jenis_halaman==='gambar_bidang'||hal.length===1;
         if(gb&&!adaGambar){adaGambar=true;gi=i;if(r.nomor_tengah)a.no=String(r.nomor_tengah).trim();
           a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}}
       catch(e){a.pesan=e.message;break}}}
-    a.img=pdf?await renderHalaman(pdf,gi+1,2200):await ubahUkuran(await keDataURL(f),2200,.88);
+    a.hal=hal.length>1?hal:null;a.gi=gi;a.img=hal[gi];
     a.thumb=await ubahUkuran(a.img,260,.7);a.status='siap'}
   catch(e){a.status='siap';a.pesan=e.message||'gagal dibaca'}
   if(S.antrian.includes(a)){dbPut('antrian',a);renderSide()}}
