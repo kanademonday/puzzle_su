@@ -230,9 +230,12 @@ aside h3:first-child{margin-top:0}
   </div>
  </div></div></div>
 <div id="aiBanner" hidden style="position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:25;background:#fff8e6;border:2px solid #f59e0b;border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px #0003;font-size:14px;max-width:92vw;text-align:center">
+ <div style="position:absolute;top:4px;right:6px;display:flex;gap:2px"><button id="bnKecil" title="Kecilkan" style="padding:0 8px;border:0;background:none;font-size:16px">—</button><button id="bnTutup" title="Tutup (sampai baca AI berikutnya)" style="padding:0 8px;border:0;background:none;font-size:16px">✕</button></div>
  <b>⏳ Kuota AI gratis habis</b><br>Kuota pulih: <b id="bnPulih"></b> &nbsp;•&nbsp; Dicoba lagi: <b id="bnCoba"></b>
  <div style="font-size:12px;color:var(--mut);margin-top:2px">SU tetap bisa didigitasi. Tambah kunci AI lain (Gemini) agar tidak perlu menunggu.</div>
  <div style="margin-top:6px"><button id="bnStop">⏹ Hentikan baca AI</button> <button id="bnAI">⚙️ Pengaturan AI</button></div></div>
+<div id="aiMini" hidden title="Klik untuk menampilkan lagi" style="position:fixed;right:16px;bottom:16px;z-index:25;background:#fff8e6;border:2px solid #f59e0b;border-radius:20px;padding:6px 12px;box-shadow:0 4px 14px #0003;font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:center">
+ <span>⏳ pulih <b id="mnPulih"></b> • coba <b id="mnCoba"></b></span><button id="mnTutup" title="Tutup" style="padding:0 6px;border:0;background:none">✕</button></div>
 <div id="toast"></div>
 
 <script>
@@ -895,7 +898,7 @@ async function bacaAIsatu(a){const hal=a.hal||[a.img];let adaGambar=false,gi=a.g
   else{ // SU ini sedang didigitasi: isi kolom yang masih kosong saja
     if(!$('#fLuas').value&&a.luas)$('#fLuas').value=a.luas;if(!$('#fNo').value&&a.no){$('#fNo').value=a.no;eDraw()}E.saran=a.sekitar;renderTet();toast('Hasil baca AI masuk ke isian yang masih kosong',2500)}}
 async function jalankanAI(){if(AIQ.jalan)return;if(!aiSiap())return toast('AI belum diatur: Data ▸ Pengaturan baca otomatis',4000);
-  AIQ.jalan=true;AIQ.stop=false;renderSide();let n=0;
+  AIQ.jalan=true;AIQ.stop=false;AIQ.banner='besar';renderSide();let n=0;
   for(;;){const a=S.antrian.find(x=>x.aiTunggu&&x.img&&x.status==='siap');if(!a||AIQ.stop)break;
     AIQ.kini=a;renderSide();
     try{await bacaAIsatu(a);a.aiTunggu=false;n++}catch(e){if(AIQ.stop)break;a.aiTunggu=false;a.pesan='Gagal dibaca AI: '+e.message}
@@ -903,7 +906,7 @@ async function jalankanAI(){if(AIQ.jalan)return;if(!aiSiap())return toast('AI be
   const dihentikan=AIQ.stop;AIQ.jalan=false;AIQ.stop=false;AIQ.kini=null;AIQ.tunggu=0;renderSide();
   toast(dihentikan?`Baca AI dihentikan (${n} SU selesai). Lanjutkan kapan saja dengan ▶.`:`Baca AI selesai: ${n} SU terbaca.`,5000)}
 $('#bnStop').onclick=()=>hentikanAI();$('#bnAI').onclick=()=>bukaAI();
-function hentikanAI(){AIQ.stop=true;$('#aiBanner').hidden=true;toast('Menghentikan baca AI…',2000)}
+function hentikanAI(){AIQ.stop=true;$('#aiBanner').hidden=true;$('#aiMini').hidden=true;toast('Menghentikan baca AI…',2000)}
 // Tombol ↻ di kartu antrian: masukkan lagi ke antrian baca AI (kartu tetap bisa didigitasi)
 function bacaUlang(a){if(!a.img)return;if(!aiSiap())return toast('AI belum diatur: Data ▸ Pengaturan baca otomatis',4000);
   Object.assign(a,{luas:0,no:'',sekitar:[],pesan:'',aiTunggu:true});AI_PROV.forEach(p=>{if((penuh[p]||0)-Date.now()<300000)delete penuh[p]});dbPut('antrian',a);renderSide();jalankanAI()}
@@ -912,7 +915,13 @@ const mmss=ms=>{const d=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(d/3600);retu
 setInterval(()=>{const now=Date.now(),habis=AIQ.jalan&&AIQ.kuota&&AIQ.tunggu>now;
   const tPulih=AIQ.pulih?(AIQ.pulih>now?mmss(AIQ.pulih-now):'sebentar lagi'):'belum diketahui (batas harian)',tCoba=mmss(AIQ.tunggu-now);
   const el=document.getElementById('aiCd');if(el)el.innerHTML=habis?`<br>⏳ kuota habis • pulih: <b>${tPulih}</b> • coba lagi: <b>${tCoba}</b>`:'';
-  const bn=$('#aiBanner');bn.hidden=!habis;if(habis){$('#bnPulih').textContent=tPulih;$('#bnCoba').textContent=tCoba}},1000);
+  const mode=AIQ.banner||'besar';$('#aiBanner').hidden=!(habis&&mode==='besar');$('#aiMini').hidden=!(habis&&mode==='kecil');
+  if(habis){$('#bnPulih').textContent=tPulih;$('#bnCoba').textContent=tCoba;$('#mnPulih').textContent=AIQ.pulih?tPulih:'?';$('#mnCoba').textContent=tCoba}},1000);
+// kotak kuota: kecilkan / tutup (muncul lagi saat baca AI dijalankan berikutnya)
+$('#bnKecil').onclick=()=>{AIQ.banner='kecil';$('#aiBanner').hidden=true};
+$('#bnTutup').onclick=()=>{AIQ.banner='tutup';$('#aiBanner').hidden=true;toast('Kotak ditutup. Waktu tunggu tetap terlihat di panel Antrian SU.',3000)};
+$('#aiMini').onclick=e=>{if(e.target.id==='mnTutup')return;AIQ.banner='besar'};
+$('#mnTutup').onclick=()=>{AIQ.banner='tutup';$('#aiMini').hidden=true};
 // Kunci pembeda SU: nomor 5 angka + tahun (nomor sama tapi tahun beda = SU berbeda); tanpa pola di nama file → nama file
 const kunciSU=(su,th,nama)=>su&&th?String(su).padStart(5,'0')+'/'+th:'f:'+String(nama).toLowerCase();
 // Semua SU yang sudah dimasukkan: kunci -> keterangan
