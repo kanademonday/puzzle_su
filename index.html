@@ -83,6 +83,21 @@ aside h3:first-child{margin-top:0}
 .menu .dd[hidden]{display:none}
 .menu .dd button{display:block;width:100%;text-align:left;border:0;padding:8px 10px}
 .menu .dd button:hover{background:#f3f5f8}
+#pop{flex-wrap:wrap}
+#popChips{width:100%;display:flex;flex-wrap:wrap;gap:4px}
+#popChips:empty{display:none}
+.chip{padding:3px 8px;border-radius:12px;font-size:12px;background:#fff8e6;border-color:#f5c26b}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.qit{border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;position:relative;background:#fff}
+.qit:hover{border-color:var(--acc)}
+.qit img{display:block;width:100%;height:92px;object-fit:cover;background:#f1f2f4}
+.qit div{padding:4px 6px;font-size:11px;line-height:1.3}
+.qit b{font-size:12px}
+.qit .x{position:absolute;top:3px;right:3px;padding:0 6px;font-size:11px;background:#fffd}
+.qit.proses{opacity:.6;cursor:wait}
+.bdg{display:inline-block;padding:0 5px;border-radius:4px;font-size:10px;background:#eef0f3}
+#aiDlg .mbox{width:min(520px,94vw);height:auto;max-height:90vh}
+#aiDlg .isi{padding:14px;overflow:auto}
 @media (max-width:800px){aside{position:absolute;z-index:5;height:calc(100% - 52px);transform:translateX(-100%);transition:.2s}aside.open{transform:none}.mform{width:100%;max-height:40%}.mbody{flex-direction:column}#btnSide{display:inline-block!important}}
 </style>
 </head>
@@ -92,10 +107,12 @@ aside h3:first-child{margin-top:0}
   <h1>🧩 Puzzle SU</h1>
   <select id="petaSel" style="max-width:260px"></select>
   <div class="sp"></div>
+  <button id="btnBanyak" title="Pilih banyak PDF/gambar SU sekaligus">📥 Banyak SU</button><input type="file" id="fBanyak" multiple accept="application/pdf,.pdf,image/*" hidden>
   <button class="pri" id="btnAdd">+ Bidang dari SU</button>
   <div class="menu">
     <button id="btnMenu">Data ▾</button>
     <div class="dd" id="dd" hidden>
+      <button data-act="ai">⚙️ Pengaturan baca otomatis (AI)</button>
       <button data-act="json">💾 Cadangkan semua data (.json)</button>
       <button data-act="import">📂 Impor data (.json)</button>
       <button data-act="dxf">📐 Ekspor peta ini ke DXF (AutoCAD)</button>
@@ -158,6 +175,7 @@ aside h3:first-child{margin-top:0}
       <button id="mBatas" class="on" type="button">✏️ Batas bidang</button>
       <button id="mTet" type="button">🔢 Nomor tetangga</button>
       <button id="mGeser" type="button">✋ Geser</button>
+      <button id="mPotong" type="button" title="Seret kotak untuk memotong gambar">✂️ Potong</button>
       <div class="sep"></div>
       <button id="bUndo" type="button">↶ Undo titik</button>
       <button id="bClear" type="button">Hapus batas</button>
@@ -168,13 +186,24 @@ aside h3:first-child{margin-top:0}
     <div id="ewrap">
       <canvas id="ecv"></canvas>
       <div id="edrop"><div style="font-size:34px">🖼️</div><div><b>Pilih, seret, atau tempel (Ctrl+V)</b> gambar SU di sini</div><button id="bImg2" type="button" class="pri">Pilih gambar</button></div>
-      <div id="pop" hidden><input id="popIn" placeholder="nomor tetangga"><button id="popOk" class="pri">OK</button><button id="popDel" class="dan">🗑</button></div>
+      <div id="pop" hidden><input id="popIn" placeholder="nomor tetangga"><button id="popOk" class="pri">OK</button><button id="popDel" class="dan">🗑</button><div id="popChips"></div></div>
     </div>
     <div class="ehint" id="eHint"></div>
    </div>
   </div>
  </div>
 </div>
+<div id="aiDlg" class="modalx" hidden style="position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:30">
+ <div class="mbox"><div class="mhead"><h2>Pengaturan baca otomatis (AI gratis)</h2><button id="aiTutup">Tutup</button></div>
+ <div class="isi">
+  <p style="margin-top:0;font-size:13px;color:var(--mut)">Dipakai untuk membaca nomor SU, tahun, luas, nomor di tengah bidang, dan nomor tetangga. Tanpa AI, nomor &amp; tahun tetap dibaca dari <b>nama file</b> (mis. <code>SU_16010401_00123_1985.pdf</code>). Pengaturan ini sama dengan aplikasi landing_otomatis bila dibuka dari alamat yang sama (kanademonday.github.io).</p>
+  <label>Penyedia</label><select id="aiProv"><option value="groq">Groq (online, gratis dengan batas pemakaian)</option><option value="ollama">Ollama (di komputer sendiri)</option><option value="mati">Tidak pakai AI (hanya nama file)</option></select>
+  <div data-p="groq"><label>Kunci API Groq (gsk_…) – buat gratis di console.groq.com</label><input id="aiKey" type="password" autocomplete="off"></div>
+  <div data-p="ollama"><label>Alamat Ollama</label><input id="aiUrl" placeholder="http://localhost:11434"></div>
+  <div data-p="groq ollama"><label>Model pembaca gambar</label><input id="aiModel"></div>
+  <div class="row" style="margin-top:12px"><button class="pri" id="aiSimpan">Simpan</button><button id="aiTes">Tes koneksi</button></div>
+  <div id="aiStat" style="margin-top:8px;font-size:13px"></div>
+ </div></div></div>
 <div id="toast"></div>
 
 <script>
@@ -206,9 +235,9 @@ function keLokal(b,w){const dx=w[0]-b.x,dy=w[1]-b.y,co=Math.cos(b.rot),si=Math.s
 function hitungSkala(b){const a=luasPoly(b.poly);if(b.luas>0&&a>0)return Math.sqrt(b.luas/a);return b.s||0.1}
 
 /* ================= PENYIMPANAN (IndexedDB) ================= */
-const S={peta:[],bidang:[],aktif:null,sel:null,view:{x:0,y:0,z:1},opt:{img:true,garis:true,snap:true,alpha:.8}};
+const S={peta:[],bidang:[],aktif:null,sel:null,view:{x:0,y:0,z:1},opt:{img:true,garis:true,snap:true,alpha:.8,lanjut:true},antrian:[]};
 let db=null;const memImg=new Map();const imgEl=new Map();
-function openDB(){return new Promise(res=>{try{const r=indexedDB.open('puzzleSU',1);r.onupgradeneeded=()=>{const d=r.result;['peta','bidang','img'].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:'id'})})};r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
+function openDB(){return new Promise(res=>{try{const r=indexedDB.open('puzzleSU',2);r.onupgradeneeded=()=>{const d=r.result;['peta','bidang','img','antrian'].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:'id'})})};r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
 function dbAll(st){return new Promise(res=>{if(!db)return res(st==='img'?[...memImg.values()]:[]);try{const q=db.transaction(st).objectStore(st).getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])}catch(e){res([])}})}
 function dbGet(st,id){return new Promise(res=>{if(!db)return res(memImg.get(id));try{const q=db.transaction(st).objectStore(st).get(id);q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)}catch(e){res(null)}})}
 function dbPut(st,o){if(st==='img')memImg.set(o.id,o);if(!db)return;try{db.transaction(st,'readwrite').objectStore(st).put(o)}catch(e){toast('Gagal menyimpan: '+e.message)}}
@@ -247,6 +276,11 @@ function letakkanOtomatis(b,lain){
     const r=Math.sqrt(luasPoly(b.poly))*b.s;b.x=mx+r*0.8+10;b.y=ys.reduce((a,c)=>a+c,0)/ys.length;sumber='belum ada tetangga yang cocok – diletakkan di samping'}
   else{b.x=0;b.y=0;sumber='bidang pertama di peta ini'}
   return sumber}
+
+/* Kembalikan posisi ke perkiraan (berdasarkan bidang lain di peta yang sama) */
+function kembalikanPerkiraan(b){const m=letakkanOtomatis(b,bidangAktif().filter(x=>x!==b));simpanBidang(b);renderSide();draw();toast(`Bidang ${b.no} dikembalikan ke perkiraan – ${m}`,3500)}
+function susunSemua(){const d=bidangAktif().sort((a,b)=>(a.dibuat||0)-(b.dibuat||0));const ok=d.filter(b=>b.kunci);let n=0;
+  for(const b of d){if(b.kunci)continue;letakkanOtomatis(b,ok);simpanBidang(b);ok.push(b);n++}fit();renderSide();toast(`${n} bidang disusun ulang dari perkiraan${ok.length>n?' (bidang terkunci tidak dipindah)':''}`,3500)}
 
 /* ================= PUZZLE (kanvas utama) ================= */
 const cv=$('#cv'),ctx=cv.getContext('2d');let DPR=1;
@@ -331,11 +365,17 @@ function renderSide(pesan,kosong){
   const cari=(S.cari||'').trim();const fil=cari?d.filter(b=>norm(b.no).includes(norm(cari))||norm(b.nib).includes(norm(cari))):d;
   let h='';
   h+=`<h3>Peta analog</h3>`;
-  if(p){h+=`<div class="row"><input id="pNama" value="${esc(p.nama)}"><button id="pRen" title="Simpan nama">✔</button><button id="pDel" class="dan" title="Hapus peta">🗑</button></div>`}
+  if(p){h+=`<div class="row"><input id="pNama" value="${esc(p.nama)}"><button id="pRen" title="Simpan nama">✔</button><button id="pDel" class="dan" title="Hapus peta">🗑</button></div>`;
+    if(d.length>1)h+=`<button id="pSusun" style="width:100%;margin-top:6px" title="Semua bidang yang tidak dikunci dikembalikan ke posisi perkiraan">↺ Susun ulang semua dari perkiraan</button>`}
   else h+=`<div class="empty">Belum ada. Peta analog dibuat saat menyimpan bidang pertama.</div>`;
   h+=`<div class="stats"><div class="stat"><b>${d.length}</b><span>bidang</span></div><div class="stat"><b style="color:${COL.landing}">${nL}</b><span>sudah landing</span></div><div class="stat"><b style="color:${COL.belum}">${d.length-nL}</b><span>belum landing</span></div></div>`;
   h+=`<div class="legend"><span><i class="dot" style="background:${COL.landing}"></i>Sudah landing</span><span><i class="dot" style="background:${COL.belum}"></i>Belum landing</span><span><i class="dot" style="border:2px dashed ${COL.kosong}"></i>Tetangga belum ada SU</span></div>`;
   if(pesan){h+=`<h3>Info</h3><div class="selbox">${pesan}${kosong?`<div style="margin-top:8px"><button class="pri" id="addFor">+ Masukkan SU nomor ${esc(kosong.no)}</button></div>`:''}</div>`}
+  if(S.antrian.length){const q=S.antrian;
+    h+=`<h3>Antrian SU (${q.length})</h3><div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
+      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':a.pesan?'⚠ '+esc(a.pesan):'siap digitasi'}</span></div>
+      ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button>`:''}</div>`).join('')}</div>
+    <label class="chk"><input type="checkbox" id="oLanjut" ${S.opt.lanjut?'checked':''}> Setelah simpan, langsung buka SU berikutnya</label>`}
   if(S.sel&&d.includes(S.sel)){const b=S.sel;
     h+=`<h3>Bidang terpilih</h3><div class="selbox"><div class="ttl">${esc(b.no)}</div>
     <div style="font-size:12px;color:var(--mut)">${b.luas?b.luas+' m²':'luas belum diisi'}${b.nib?' • NIB '+esc(b.nib):''}${b.su?' • '+esc(b.su):''}</div>
@@ -344,6 +384,7 @@ function renderSide(pesan,kosong){
     <label>Putar: <span id="selRotV"></span></label><input type="range" id="selRot" min="0" max="360" step="0.5">
     <div class="row" style="margin-top:6px"><button id="r90m">↺ 90°</button><button id="r90p">↻ 90°</button><button id="sKunci" class="${b.kunci?'on':''}">${b.kunci?'🔒 Terkunci':'🔓 Kunci'}</button></div>
     ${b.luas?'':`<label>Skala (tanpa luas): <span id="sclV">${(b.s*100).toFixed(1)} cm/px</span></label><input type="range" id="scl" min="-3" max="3" step="0.01" value="${Math.log10(b.s)}">`}
+    <button id="sReset" style="width:100%;margin-top:8px" ${b.kunci?'disabled':''}>↺ Kembalikan ke posisi perkiraan</button>
     <div class="row" style="margin-top:8px"><button id="sEdit">✏️ Edit SU</button><button id="sDel" class="dan">🗑 Hapus</button></div></div>`}
   h+=`<h3>Daftar bidang (${d.length})</h3><input id="cari" placeholder="cari nomor pendaftaran / NIB" value="${esc(cari)}" style="margin-bottom:6px">`;
   h+=`<div class="list">${fil.length?fil.sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true})).map(b=>`<div class="it ${b===S.sel?'sel':''}" data-id="${b.id}"><i class="dot" style="background:${COL[b.status]}"></i>${esc(b.no)}<small>${b.luas?b.luas+' m²':''}</small></div>`).join(''):'<div class="empty">Belum ada bidang.</div>'}</div>`;
@@ -368,6 +409,11 @@ function renderSide(pesan,kosong){
   on('scl','input',e=>{S.sel.s=Math.pow(10,+e.target.value);$('#sclV').textContent=(S.sel.s*100).toFixed(1)+' cm/px';draw()});
   on('scl','change',()=>simpanBidang(S.sel));
   on('sEdit','click',()=>bukaEditor(S.sel));
+  on('sReset','click',()=>kembalikanPerkiraan(S.sel));
+  on('pSusun','click',e=>arm(e.target,susunSemua,'Yakin? posisi geseranmu hilang'));
+  on('oLanjut','change',e=>{S.opt.lanjut=e.target.checked});
+  side.querySelectorAll('.qit[data-q]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.dataset.qx)return;const a=S.antrian.find(x=>x.id===el.dataset.q);if(a&&a.status!=='proses')bukaEditor(null,'',a)}));
+  side.querySelectorAll('[data-qx]').forEach(el=>el.addEventListener('click',()=>arm(el,()=>{S.antrian=S.antrian.filter(x=>x.id!==el.dataset.qx);dbDel('antrian',el.dataset.qx);renderSide()},'?')));
   on('sDel','click',e=>arm(e.target,()=>{const b=S.sel;dbDel('bidang',b.id);dbDel('img',b.img);S.bidang=S.bidang.filter(x=>x!==b);S.sel=null;renderSide();draw();toast('Bidang '+b.no+' dihapus')}));
   on('cari','input',e=>{S.cari=e.target.value;const pos=e.target.selectionStart;renderSide();const c=$('#cari');c.focus();c.setSelectionRange(pos,pos)});
   side.querySelectorAll('.it[data-id]').forEach(el=>el.addEventListener('click',()=>{const b=S.bidang.find(x=>x.id===el.dataset.id);if(b)fokus(b)}));
@@ -378,27 +424,31 @@ function renderSide(pesan,kosong){
   updRot()}
 
 /* ================= EDITOR SU ================= */
-const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null};
+const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null,saran:[],draft:null,stack:[]};
 const ecv=$('#ecv'),ectx=ecv.getContext('2d');
-function bukaEditor(b,noAwal){
-  E.open=true;E.b=b;$('#modal').hidden=false;$('#eTitle').textContent=b?'Edit bidang '+b.no:'Tambah bidang dari SU';
+function bukaEditor(b,noAwal,draft){
+  E.open=true;E.b=b;E.draft=draft||null;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
+  $('#eTitle').textContent=b?'Edit bidang '+b.no:draft?'Digitasi SU dari antrian – '+draft.nama:'Tambah bidang dari SU';
   const p=b?S.peta.find(x=>x.id===b.petaId):petaAktif();
-  $('#fPeta').value=p?p.nama:'';$('#fNo').value=b?b.no:(noAwal||'');$('#fLuas').value=b&&b.luas?b.luas:'';$('#fNib').value=b?.nib||'';$('#fSu').value=b?.su||'';$('#fCat').value=b?.catatan||'';
+  $('#fPeta').value=draft&&draft.petaNama?draft.petaNama:p?p.nama:'';$('#fNo').value=b?b.no:draft?(draft.no||''):(noAwal||'');
+  $('#fLuas').value=b&&b.luas?b.luas:draft&&draft.luas?draft.luas:'';$('#fNib').value=b?.nib||'';
+  $('#fSu').value=b?.su||(draft&&draft.su?`SU ${draft.su}${draft.tahun?'/'+draft.tahun:''}`:'');$('#fCat').value=b?.catatan||(draft?draft.nama:'');
   document.querySelector(`input[name=fSt][value=${b?.status==='landing'?'landing':'belum'}]`).checked=true;
   E.poly=b?b.poly.map(q=>[...q]):[];E.tet=b?(b.tetangga||[]).map(t=>({...t})):[];E.closed=E.poly.length>=3;E.imgId=b?.img||null;E.imgData=null;E.img=null;
   setMode(E.poly.length>=3?'tet':'batas');$('#pop').hidden=true;
   if(E.imgId){dbGet('img',E.imgId).then(r=>{if(r)muatGambar(r.data,false)})}
-  $('#edrop').hidden=!!E.imgId;
-  renderTet();requestAnimationFrame(()=>{eUkur();if(!E.imgId)$('#fPeta').value?$('#fNo').focus():$('#fPeta').focus()})}
+  $('#edrop').hidden=!!(E.imgId||draft);
+  renderTet();requestAnimationFrame(()=>{eUkur();if(draft)muatGambar(draft.img,true);if(!E.imgId&&!draft)$('#fPeta').value?$('#fNo').focus():$('#fPeta').focus()})}
 function tutupEditor(){E.open=false;$('#modal').hidden=true;draw()}
 function muatGambar(data,baru){const im=new Image();im.onload=()=>{E.img=im;if(baru){E.imgData=data;E.poly=[];E.tet=[];E.closed=false;setMode('batas');renderTet()}$('#edrop').hidden=true;eFit()};im.src=data}
 function bacaFile(f){if(!f||!/^image\//.test(f.type))return toast('Berkas harus berupa gambar (JPG/PNG)');const rd=new FileReader();
   rd.onload=()=>{const im=new Image();im.onload=()=>{const M=2200,k=Math.min(1,M/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
     const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);muatGambar(c.toDataURL('image/jpeg',.88),true)};im.src=rd.result};rd.readAsDataURL(f)}
-function setMode(m){E.mode=m;$('#mBatas').classList.toggle('on',m==='batas');$('#mTet').classList.toggle('on',m==='tet');$('#mGeser').classList.toggle('on',m==='geser');
+function setMode(m){E.mode=m;$('#mBatas').classList.toggle('on',m==='batas');$('#mTet').classList.toggle('on',m==='tet');$('#mGeser').classList.toggle('on',m==='geser');$('#mPotong').classList.toggle('on',m==='potong');
   $('#eHint').innerHTML={batas:'Klik titik-titik sudut batas bidang secara berurutan. Klik titik pertama untuk menutup. Titik yang sudah ada bisa diseret. Roda mouse = zoom, klik kanan/tengah seret = geser.',
-    tet:'Klik di posisi setiap <b>nomor pendaftaran tetangga</b> yang tertulis di sekitar bidang, lalu ketik nomornya. Klik tanda yang sudah ada untuk mengubah/menghapus. Kalau tetangganya tidak tertulis, lewati saja.',
-    geser:'Seret gambar untuk menggeser, roda mouse untuk zoom.'}[m];eDraw()}
+    tet:'Klik di posisi setiap <b>nomor pendaftaran tetangga</b> yang tertulis di sekitar bidang, lalu ketik nomornya. Nomor yang sudah diketik otomatis tersimpan saat kamu klik titik berikutnya (titik tanpa nomor dibuang). Klik tanda yang sudah ada untuk mengubah/menghapus; bisa juga diseret. Kalau tetangganya tidak tertulis, lewati saja.',
+    geser:'Seret gambar untuk menggeser, roda mouse untuk zoom.',
+    potong:'Seret kotak di sekitar bidang beserta nomor-nomor tetangganya, lalu lepas: gambar dipotong. ↶ untuk membatalkan potongan.'}[m];eDraw()}
 function eUkur(){const r=ecv.getBoundingClientRect();ecv.width=Math.max(1,r.width*DPR);ecv.height=Math.max(1,r.height*DPR);eDraw()}
 function eFit(){if(!E.img)return;const W=ecv.clientWidth,H=ecv.clientHeight,z=Math.min(W/E.img.width,H/E.img.height)*.95;E.v={z,x:(W-E.img.width*z)/2,y:(H-E.img.height*z)/2};eDraw()}
 const e2i=(x,y)=>[(x-E.v.x)/E.v.z,(y-E.v.y)/E.v.z],i2e=q=>[q[0]*E.v.z+E.v.x,q[1]*E.v.z+E.v.y];
@@ -410,18 +460,34 @@ function eDraw(){const c=ectx;c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,ecv.wi
   if(E.closed){const ct=i2e(pusat(E.poly));const no=$('#fNo').value.trim()||'(no. pendaftaran?)';
     c.font='600 13px system-ui';const w=c.measureText(no).width;c.fillStyle='#2563ebee';c.fillRect(ct[0]-w/2-5,ct[1]-11,w+10,22);c.fillStyle='#fff';c.textAlign='center';c.textBaseline='middle';c.fillText(no,ct[0],ct[1])}
   E.tet.forEach((t,i)=>{const q=i2e([t.x,t.y]);c.fillStyle='#f59e0b';c.beginPath();c.arc(q[0],q[1],6,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke();
-    c.font='600 12px system-ui';const w=c.measureText(t.no).width;c.fillStyle='#fff8e6f0';c.fillRect(q[0]+9,q[1]-10,w+8,20);c.strokeStyle='#f59e0b';c.lineWidth=1;c.strokeRect(q[0]+9,q[1]-10,w+8,20);c.fillStyle='#7c4a03';c.textAlign='left';c.textBaseline='middle';c.fillText(t.no,q[0]+13,q[1])})}
-function renderTet(){const el=$('#eTet');el.innerHTML=E.tet.length?E.tet.map((t,i)=>`<div class="it"><i class="dot" style="background:#f59e0b"></i><input data-i="${i}" value="${esc(t.no)}" style="padding:3px 6px"><button data-d="${i}" class="dan" style="padding:3px 8px">✕</button></div>`).join(''):'<div class="empty">Belum ada. Pilih mode “Nomor tetangga”, lalu klik pada gambar.</div>';
+    c.font='600 12px system-ui';const w=c.measureText(t.no).width;c.fillStyle='#fff8e6f0';c.fillRect(q[0]+9,q[1]-10,w+8,20);c.strokeStyle='#f59e0b';c.lineWidth=1;c.strokeRect(q[0]+9,q[1]-10,w+8,20);c.fillStyle='#7c4a03';c.textAlign='left';c.textBaseline='middle';c.fillText(t.no,q[0]+13,q[1])});
+  if(E.drag&&E.drag.m==='crop'){const a=i2e(E.drag.a),b=i2e(E.drag.b);c.setLineDash([6,4]);c.strokeStyle='#e11d48';c.lineWidth=2;c.strokeRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);c.setLineDash([])}}
+function potong(a,b){if(!E.img)return;const W=E.img.width,H=E.img.height;
+  let x0=Math.max(0,Math.min(a[0],b[0])),y0=Math.max(0,Math.min(a[1],b[1])),x1=Math.min(W,Math.max(a[0],b[0])),y1=Math.min(H,Math.max(a[1],b[1]));
+  if(x1-x0<20||y1-y0<20){eDraw();return toast('Seret kotak yang lebih besar untuk memotong')}
+  x0=Math.round(x0);y0=Math.round(y0);const w=Math.round(x1-x0),h=Math.round(y1-y0),c=document.createElement('canvas');c.width=w;c.height=h;
+  c.getContext('2d').drawImage(E.img,x0,y0,w,h,0,0,w,h);
+  E.stack.push({src:E.img.src,poly:E.poly.map(q=>[...q]),tet:E.tet.map(t=>({...t})),data:E.imgData});
+  E.poly=E.poly.map(q=>[q[0]-x0,q[1]-y0]);E.tet=E.tet.map(t=>({...t,x:t.x-x0,y:t.y-y0}));
+  const data=c.toDataURL('image/jpeg',.9);E.imgData=data;muatGambar(data,false);renderTet();setMode(E.closed?'tet':'batas');toast('Gambar dipotong. Batalkan dengan ↶ (di mode Potong).')}
+function renderTet(){const el=$('#eTet');const sisa=E.saran.filter(n=>!E.tet.some(t=>norm(t.no)===norm(n)));
+  el.innerHTML=(sisa.length?`<div class="empty" style="background:#fff8e6">Hasil baca, belum ditempatkan: <b>${sisa.map(esc).join(', ')}</b><br>Klik posisinya di gambar lalu pilih nomornya.</div>`:'')+(E.tet.length?E.tet.map((t,i)=>`<div class="it"><i class="dot" style="background:#f59e0b"></i><input data-i="${i}" value="${esc(t.no)}" style="padding:3px 6px"><button data-d="${i}" class="dan" style="padding:3px 8px">✕</button></div>`).join(''):'<div class="empty">Belum ada. Pilih mode “Nomor tetangga”, lalu klik pada gambar.</div>');
   el.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>{E.tet[+i.dataset.i].no=i.value;eDraw()}));
   el.querySelectorAll('button[data-d]').forEach(b=>b.addEventListener('click',()=>{E.tet.splice(+b.dataset.d,1);renderTet();eDraw()}))}
 function bukaPop(sx,sy,idx,pt){E.popIdx=idx;E.popPt=pt;const p=$('#pop'),W=ecv.clientWidth;p.hidden=false;p.style.left=Math.min(Math.max(4,sx+10),W-270)+'px';p.style.top=Math.max(4,sy-50)+'px';
-  $('#popIn').value=idx>=0?E.tet[idx].no:'';$('#popDel').style.display=idx>=0?'':'none';setTimeout(()=>$('#popIn').focus(),0)}
+  $('#popIn').value=idx>=0?E.tet[idx].no:'';$('#popDel').style.display=idx>=0?'':'none';
+  const sisa=idx>=0?[]:E.saran.filter(n=>!E.tet.some(t=>norm(t.no)===norm(n)));
+  $('#popChips').innerHTML=sisa.map(n=>`<button class="chip" type="button" data-n="${esc(n)}">${esc(n)}</button>`).join('');
+  $('#popChips').querySelectorAll('button').forEach(c=>c.onclick=()=>{$('#popIn').value=c.dataset.n;okPop()});setTimeout(()=>$('#popIn').focus(),0)}
 function okPop(){const v=$('#popIn').value.trim();if(v){if(E.popIdx>=0)E.tet[E.popIdx].no=v;else E.tet.push({no:v,x:E.popPt[0],y:E.popPt[1]})}$('#pop').hidden=true;renderTet();eDraw()}
-$('#popOk').onclick=okPop;$('#popIn').addEventListener('keydown',e=>{if(e.key==='Enter')okPop();if(e.key==='Escape')$('#pop').hidden=true});
+$('#popOk').onclick=okPop;
+$('#popIn').addEventListener('blur',e=>{const r=e.relatedTarget;if(r&&!$('#pop').contains(r)&&!$('#pop').hidden)okPop()}); // pindah ke isian/tombol lain = OK$('#popIn').addEventListener('keydown',e=>{if(e.key==='Enter')okPop();if(e.key==='Escape')$('#pop').hidden=true});
 $('#popDel').onclick=()=>{if(E.popIdx>=0)E.tet.splice(E.popIdx,1);$('#pop').hidden=true;renderTet();eDraw()};
 ecv.addEventListener('contextmenu',e=>e.preventDefault());
-ecv.addEventListener('pointerdown',e=>{if(!E.img)return;ecv.setPointerCapture(e.pointerId);$('#pop').hidden=true;const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,q=e2i(sx,sy);
+ecv.addEventListener('pointerdown',e=>{if(!E.img)return;ecv.setPointerCapture(e.pointerId);if(!$('#pop').hidden)okPop(); // nomor yang sudah diketik = OK; kosong = dibuang
+const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,q=e2i(sx,sy);
   if(e.button!==0||E.mode==='geser'){E.drag={m:'pan',sx,sy,vx:E.v.x,vy:E.v.y};return}
+  if(E.mode==='potong'){E.drag={m:'crop',a:q,b:q};return}
   if(E.mode==='batas'){const i=E.poly.findIndex(p=>{const s=i2e(p);return Math.hypot(s[0]-sx,s[1]-sy)<9});
     if(i===0&&!E.closed&&E.poly.length>=3){E.closed=true;eDraw();toast('Batas bidang tertutup. Lanjut: tandai nomor tetangga.');setMode('tet');return}
     if(i>=0){E.drag={m:'vtx',i};return}
@@ -429,13 +495,14 @@ ecv.addEventListener('pointerdown',e=>{if(!E.img)return;ecv.setPointerCapture(e.
   if(E.mode==='tet'){const i=E.tet.findIndex(t=>{const s=i2e([t.x,t.y]);return Math.hypot(s[0]-sx,s[1]-sy)<10});
     if(i>=0){E.drag={m:'tet',i,sx,sy,gerak:false};return}bukaPop(sx,sy,-1,q)}});
 ecv.addEventListener('pointermove',e=>{if(!E.drag)return;const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,d=E.drag;
-  if(d.m==='pan'){E.v.x=d.vx+sx-d.sx;E.v.y=d.vy+sy-d.sy}else if(d.m==='vtx'){E.poly[d.i]=e2i(sx,sy)}
+  if(d.m==='pan'){E.v.x=d.vx+sx-d.sx;E.v.y=d.vy+sy-d.sy}else if(d.m==='vtx'){E.poly[d.i]=e2i(sx,sy)}else if(d.m==='crop'){d.b=e2i(sx,sy)}
   else if(d.m==='tet'){if(Math.hypot(sx-d.sx,sy-d.sy)>4)d.gerak=true;if(d.gerak){const q=e2i(sx,sy);E.tet[d.i].x=q[0];E.tet[d.i].y=q[1]}}eDraw()});
-ecv.addEventListener('pointerup',e=>{const d=E.drag;E.drag=null;if(d&&d.m==='tet'&&!d.gerak){const r=ecv.getBoundingClientRect();bukaPop(e.clientX-r.left,e.clientY-r.top,d.i)}});
+ecv.addEventListener('pointerup',e=>{const d=E.drag;E.drag=null;if(d&&d.m==='crop')potong(d.a,d.b);if(d&&d.m==='tet'&&!d.gerak){const r=ecv.getBoundingClientRect();bukaPop(e.clientX-r.left,e.clientY-r.top,d.i)}});
 ecv.addEventListener('wheel',e=>{e.preventDefault();if(!E.img)return;const r=ecv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,q=e2i(sx,sy);
   E.v.z=Math.min(40,Math.max(.02,E.v.z*(e.deltaY<0?1.15:1/1.15)));E.v.x=sx-q[0]*E.v.z;E.v.y=sy-q[1]*E.v.z;eDraw()},{passive:false});
-$('#mBatas').onclick=()=>setMode('batas');$('#mTet').onclick=()=>setMode('tet');$('#mGeser').onclick=()=>setMode('geser');
-$('#bUndo').onclick=()=>{if(E.closed)E.closed=false;else E.poly.pop();eDraw()};
+$('#mBatas').onclick=()=>setMode('batas');$('#mTet').onclick=()=>setMode('tet');$('#mGeser').onclick=()=>setMode('geser');$('#mPotong').onclick=()=>setMode('potong');
+$('#bUndo').onclick=()=>{if(E.mode==='potong'){const st=E.stack.pop();if(!st)return toast('Tidak ada potongan untuk dibatalkan');E.poly=st.poly;E.tet=st.tet;E.imgData=st.data;muatGambar(st.src,false);renderTet();return}
+  if(E.closed)E.closed=false;else E.poly.pop();eDraw()};
 $('#bClear').onclick=()=>{E.poly=[];E.closed=false;setMode('batas')};
 $('#bFull').onclick=()=>{if(!E.img)return;const w=E.img.width,h=E.img.height;E.poly=[[0,0],[w,0],[w,h],[0,h]];E.closed=true;setMode('tet')};
 $('#bEFit').onclick=eFit;
@@ -451,6 +518,7 @@ $('#fNo').addEventListener('input',eDraw);
 $('#eCancel').onclick=tutupEditor;
 window.addEventListener('keydown',e=>{if(E.open&&e.key==='Escape'&&$('#pop').hidden)tutupEditor()});
 $('#eSave').onclick=()=>{
+  if(!$('#pop').hidden)okPop();
   const nama=$('#fPeta').value.trim(),no=$('#fNo').value.trim();
   if(!nama)return toast('Isi / pilih nama peta analog dulu'),$('#fPeta').focus();
   if(!no)return toast('Isi nomor pendaftaran bidang ini'),$('#fNo').focus();
@@ -472,7 +540,116 @@ $('#eSave').onclick=()=>{
   if(baru)S.bidang.push(b);simpanBidang(b);
   S.aktif=p.id;lsSet('puzzleSU.aktif',S.aktif);S.sel=b;tutupEditor();renderSel();
   if(baru&&S.bidang.filter(x=>x.petaId===p.id).length===1)fit();else fokus(b);renderSide();
-  toast(`Bidang ${no} disimpan${pesan?' – '+pesan:''}`,4000)};
+  toast(`Bidang ${no} disimpan${pesan?' – '+pesan:''}`,4000);
+  if(E.draft){const id=E.draft.id;S.antrian=S.antrian.filter(x=>x.id!==id);dbDel('antrian',id);E.draft=null;renderSide();
+    const nx=S.antrian.find(x=>x.status!=='proses');if(nx&&S.opt.lanjut)setTimeout(()=>bukaEditor(null,'',nx),350)}};
+
+/* ================= BANYAK SU: BACA OTOMATIS (nama file + AI gratis Groq/Ollama) ================= */
+// Pengaturan AI disimpan di kunci yang sama dengan aplikasi landing_otomatis ('plotkw.ai'), jadi kunci Groq bisa dipakai bersama
+const AI_BAWAAN={groq:'qwen/qwen3.8-27b',ollama:'qwen2.5vl:7b'};
+const GROQ_VISI=[/^qwen\/qwen3\.\d+-27b$/,/qwen.*vl/i,/llama-4-(scout|maverick)/i,/vision/i];
+const AI={prov:'groq',keys:{},models:{},url:'http://localhost:11434'};
+try{const v=JSON.parse(lsGet('plotkw.ai')||'{}');AI.prov=v.prov&&v.prov!=='claude'?v.prov:'groq';AI.keys=v.keys||{};AI.models=v.models||{};AI.url=v.url||AI.url;if(lsGet('puzzleSU.aiMati')==='1')AI.prov='mati'}catch(e){}
+const aiModel=()=>AI.models[AI.prov]||AI_BAWAAN[AI.prov];
+const aiSiap=()=>AI.prov==='ollama'||(AI.prov==='groq'&&!!AI.keys.groq);
+function simpanAI(){let v={};try{v=JSON.parse(lsGet('plotkw.ai')||'{}')}catch(e){}
+  if(AI.prov!=='mati')v.prov=AI.prov;v.keys=AI.keys;v.models=AI.models;v.url=AI.url;lsSet('plotkw.ai',JSON.stringify(v));lsSet('puzzleSU.aiMati',AI.prov==='mati'?'1':'0')}
+function bukaAI(){$('#aiProv').value=AI.prov;$('#aiKey').value=AI.keys.groq||'';$('#aiUrl').value=AI.url;$('#aiModel').value=AI.prov==='mati'?'':aiModel();tampilAI();$('#aiStat').textContent='';$('#aiDlg').hidden=false}
+function tampilAI(){const pv=$('#aiProv').value;document.querySelectorAll('#aiDlg [data-p]').forEach(e=>e.hidden=!e.dataset.p.split(' ').includes(pv))}
+function ambilAI(){const pv=$('#aiProv').value;if(pv!=='mati'){AI.prov=pv;AI.keys.groq=$('#aiKey').value.trim();AI.url=($('#aiUrl').value.trim()||AI.url).replace(/\/+$/,'');
+  const m=$('#aiModel').value.trim();if(m)AI.models[pv]=m}else AI.prov='mati';simpanAI()}
+$('#aiProv').onchange=()=>{tampilAI();const pv=$('#aiProv').value;$('#aiModel').value=pv==='mati'?'':(AI.models[pv]||AI_BAWAAN[pv])};
+$('#aiTutup').onclick=()=>$('#aiDlg').hidden=true;
+$('#aiSimpan').onclick=()=>{ambilAI();$('#aiDlg').hidden=true;toast(AI.prov==='mati'?'Baca otomatis hanya dari nama file':'Pengaturan AI disimpan')};
+$('#aiTes').onclick=async()=>{ambilAI();const st=$('#aiStat');st.textContent='Menghubungi…';
+  try{if(AI.prov==='mati'){st.textContent='AI dimatikan.';return}
+    if(AI.prov==='groq'){if(!AI.keys.groq){st.textContent='Isi kunci API Groq dulu.';return}
+      const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:'Bearer '+AI.keys.groq}});if(r.status===401){st.textContent='❌ Kunci salah.';return}
+      const ada=((await r.json()).data||[]).map(m=>m.id);if(ada.includes(aiModel())){st.textContent='✅ Siap. Model '+aiModel()+' tersedia.';return}
+      const g=pilihModelVisi(ada);if(g){AI.models.groq=g;simpanAI();$('#aiModel').value=g;st.textContent='✅ Siap. Model diganti otomatis ke '+g}else st.textContent='⚠ Tidak ada model pembaca gambar yang dikenali.';return}
+    const r=await fetch(AI.url+'/api/tags');const ada=((await r.json()).models||[]).map(m=>m.name);
+    st.textContent=ada.some(n=>n.startsWith(aiModel().split(':')[0]))?'✅ Ollama siap.':`⚠ Model belum diunduh. Jalankan: ollama pull ${aiModel()}`}
+  catch(e){st.textContent='❌ Tidak terhubung ('+e.message+'). Buka aplikasi dari kanademonday.github.io/puzzle_su, bukan dari halaman Claude.'}};
+function pilihModelVisi(ada){for(const re of GROQ_VISI){const m=ada.filter(x=>re.test(x)).sort().reverse()[0];if(m)return m}return null}
+const SKEMA_SU={type:'object',properties:{
+  jenis_halaman:{type:'string',enum:['formulir_surat_ukur','gambar_bidang','buku_tanah','lainnya']},
+  nomor_surat_ukur:{type:['string','null']},tahun:{type:['string','null']},luas_angka:{type:['number','null']},
+  nomor_tengah:{type:['string','null']},nomor_sekitar:{type:'array',items:{type:'string'}},keterbacaan:{type:'string',enum:['baik','sedang','buruk']}},
+  required:['jenis_halaman','nomor_surat_ukur','tahun','luas_angka','nomor_tengah','nomor_sekitar','keterbacaan']};
+const PROMPT_SU=`Ini satu halaman hasil scan dokumen pertanahan Indonesia lama (Surat Ukur / Gambar Situasi) dari Kota Samarinda. Tulisan bisa ketikan atau tulisan tangan.
+Isi JSON sesuai skema:
+- jenis_halaman: formulir_surat_ukur (isian data), gambar_bidang (halaman berisi gambar/sketsa bidang tanah), buku_tanah, atau lainnya.
+- nomor_surat_ukur dan tahun surat ukur bila tertulis (mis. "123" dan "1985").
+- luas_angka: luas tanah dalam m² (angka saja).
+- nomor_tengah: angka yang tertulis DI DALAM bidang utama pada gambar (nomor pendaftaran/persil bidang ini).
+- nomor_sekitar: angka-angka nomor persil/pendaftaran yang tertulis DI LUAR bidang utama, di bidang-bidang sekitarnya. JANGAN masukkan angka ukuran sisi (meter, biasanya ada koma/desimal), nomor titik/patok (angka romawi atau kecil di sudut), atau skala.
+Aturan: JANGAN menebak. Bila tidak terbaca, isi null (atau [] untuk daftar). Jangan menuliskan nama orang.`;
+const tidur=ms=>new Promise(r=>setTimeout(r,ms));
+async function panggilAI(b64){
+  if(AI.prov==='ollama'){let r;try{r=await fetch(AI.url+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:aiModel(),stream:false,format:SKEMA_SU,options:{temperature:0,num_ctx:8192},messages:[{role:'user',content:PROMPT_SU,images:[b64]}]})})}
+    catch(e){throw new Error('Ollama tidak bisa dihubungi')}
+    const t=await r.text();if(!r.ok)throw new Error('Ollama HTTP '+r.status);return JSON.parse(JSON.parse(t).message.content)}
+  const isi=PROMPT_SU+'\n\nBalas HANYA dengan satu objek JSON yang mengikuti skema ini:\n'+JSON.stringify(SKEMA_SU);
+  for(let coba=0;coba<5;coba++){let r;
+    try{r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+AI.keys.groq},
+      body:JSON.stringify({model:aiModel(),temperature:0,response_format:{type:'json_object'},...(coba===0?{reasoning_effort:'none'}:{}),
+        messages:[{role:'user',content:[{type:'text',text:isi},{type:'image_url',image_url:{url:'data:image/jpeg;base64,'+b64}}]}]})})}
+    catch(e){throw new Error('AI tidak bisa dihubungi (buka dari kanademonday.github.io/puzzle_su)')}
+    const t=await r.text();
+    if(r.status===429){const w=Math.min(60,+(r.headers.get('retry-after')||0)||10*(coba+1));toast(`Batas gratis Groq tercapai, menunggu ${w} detik…`);await tidur(w*1000);continue}
+    if(r.status===400&&/reasoning_effort/i.test(t))continue;
+    if((r.status===404||r.status===400)&&/model/i.test(t)&&coba<2){try{const lm=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:'Bearer '+AI.keys.groq}});
+      const g=pilihModelVisi(((await lm.json()).data||[]).map(m=>m.id));if(g&&g!==aiModel()){AI.models.groq=g;simpanAI();continue}}catch(e){}}
+    if(!r.ok)throw new Error(r.status===401?'Kunci API Groq tidak valid':'Groq HTTP '+r.status);
+    const c=JSON.parse(t).choices[0].message.content;return JSON.parse(c.slice(c.indexOf('{'),c.lastIndexOf('}')+1))}
+  throw new Error('Batas gratis Groq masih penuh')}
+// Nama file seperti aplikasi landing_otomatis: SU_16010401_00123_1985.pdf
+function bacaNamaFile(n){const nm=n.replace(/\.[^.]+$/,'');
+  const m=nm.match(/(?:^|[^A-Za-z])(SU|GS)[_\s-]?(\d{8})[_\s-]?(\d{1,6})[_\s-]?(\d{4})(?!\d)/i);
+  if(m)return{nomor:String(+m[3]),tahun:m[4]};
+  const m2=nm.match(/(?:SU|GS)[_\s.-]*(\d{1,6})[_\s/.-]+(\d{4})(?!\d)/i);if(m2)return{nomor:String(+m2[1]),tahun:m2[2]};return{}}
+const PDFJS_URL='https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/';let PDFJS=null;
+async function muatPdfjs(){if(PDFJS)return PDFJS;try{PDFJS=await import(PDFJS_URL+'pdf.min.mjs')}catch(e){throw new Error('Pembaca PDF gagal dimuat (butuh internet)')}
+  PDFJS.GlobalWorkerOptions.workerSrc=PDFJS_URL+'pdf.worker.min.mjs';return PDFJS}
+async function renderHalaman(pdf,no,panjang){const pg=await pdf.getPage(no),v1=pg.getViewport({scale:1}),sc=panjang/Math.max(v1.width,v1.height),vp=pg.getViewport({scale:sc});
+  const c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+  await pg.render({canvasContext:x,viewport:vp}).promise;return c.toDataURL('image/jpeg',.88)}
+function ubahUkuran(src,maks,q=.85){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const k=Math.min(1,maks/Math.max(im.width,im.height)),c=document.createElement('canvas');
+  c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',q))};
+  im.onerror=()=>no(new Error('Gambar tidak bisa dibaca'));im.src=src})}
+const keDataURL=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(r.error);r.readAsDataURL(f)});
+const b64=u=>u.slice(u.indexOf(',')+1);
+let antriProses=Promise.resolve();
+function masukkanBanyak(files){const arr=[...files].filter(f=>/^image\//.test(f.type)||/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+  if(!arr.length)return toast('Pilih berkas PDF atau gambar SU');
+  const petaNama=petaAktif()?.nama||'';
+  const items=arr.map(f=>{const nf=bacaNamaFile(f.name);return{id:uid(),nama:f.name,petaNama,su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:'',dibuat:Date.now(),f}});
+  S.antrian.push(...items);renderSide();
+  toast(`${arr.length} SU masuk antrian${aiSiap()?' – dibaca otomatis satu per satu':' – nomor & tahun dari nama file (AI belum diatur: Data ▸ Pengaturan baca otomatis)'}`,5000);
+  items.forEach(a=>{antriProses=antriProses.then(()=>prosesSatu(a))});
+  antriProses.then(()=>toast('Semua SU di antrian selesai dibaca. Klik kartunya untuk digitasi.',5000))}
+async function prosesSatu(a){const f=a.f;delete a.f;
+  try{let hal=[],pdf=null;
+    if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){const lib=await muatPdfjs();pdf=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+      for(let i=1;i<=Math.min(pdf.numPages,6);i++)hal.push(await renderHalaman(pdf,i,1600))}
+    else hal=[await ubahUkuran(await keDataURL(f),1600)];
+    let gi=hal.length-1,adaGambar=false;
+    if(aiSiap()){for(let i=0;i<hal.length;i++){try{const r=await panggilAI(b64(hal[i]));
+        if(r.nomor_surat_ukur&&!a.su)a.su=String(r.nomor_surat_ukur).trim();if(r.tahun&&!a.tahun)a.tahun=String(r.tahun).trim();
+        if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
+        const gb=r.jenis_halaman==='gambar_bidang'||hal.length===1;
+        if(gb&&!adaGambar){adaGambar=true;gi=i;if(r.nomor_tengah)a.no=String(r.nomor_tengah).trim();
+          a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}}
+      catch(e){a.pesan=e.message;break}}}
+    a.img=pdf?await renderHalaman(pdf,gi+1,2200):await ubahUkuran(await keDataURL(f),2200,.88);
+    a.thumb=await ubahUkuran(a.img,260,.7);a.status='siap'}
+  catch(e){a.status='siap';a.pesan=e.message||'gagal dibaca'}
+  if(S.antrian.includes(a)){dbPut('antrian',a);renderSide()}}
+$('#btnBanyak').onclick=()=>$('#fBanyak').click();
+$('#fBanyak').onchange=e=>{masukkanBanyak(e.target.files);e.target.value=''};
+$('#stage').addEventListener('dragover',e=>e.preventDefault());
+$('#stage').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length)masukkanBanyak(e.dataTransfer.files)});
 
 /* ================= EKSPOR / IMPOR ================= */
 const tgl=()=>new Date().toISOString().slice(0,10);
@@ -498,7 +675,7 @@ function eksporCSV(){const d=bidangAktif();if(!d.length)return toast('Peta ini b
   download(`${petaAktif().nama.replace(/[^\w\- ]+/g,'_')}.csv`,'﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv')}
 function eksporPNG(){cv.toBlob(b=>b&&download(`${(petaAktif()?.nama||'puzzle').replace(/[^\w\- ]+/g,'_')}.png`,b))}
 $('#btnMenu').onclick=e=>{e.stopPropagation();$('#dd').hidden=!$('#dd').hidden};document.addEventListener('click',()=>$('#dd').hidden=true);
-$('#dd').addEventListener('click',e=>{const a=e.target.dataset.act;if(!a)return;({json:eksporJSON,import:()=>$('#fImport').click(),dxf:eksporDXF,csv:eksporCSV,png:eksporPNG})[a]()});
+$('#dd').addEventListener('click',e=>{const a=e.target.dataset.act;if(!a)return;({ai:bukaAI,json:eksporJSON,import:()=>$('#fImport').click(),dxf:eksporDXF,csv:eksporCSV,png:eksporPNG})[a]()});
 $('#fImport').onchange=e=>{if(e.target.files[0])imporJSON(e.target.files[0]);e.target.value=''};
 
 /* ================= MULAI ================= */
@@ -508,7 +685,7 @@ $('#petaSel').onchange=e=>{S.aktif=e.target.value;S.sel=null;lsSet('puzzleSU.akt
 $('#tFit').onclick=fit;$('#tIn').onclick=()=>zoomDi(1.3,cv.clientWidth/2,cv.clientHeight/2);$('#tOut').onclick=()=>zoomDi(1/1.3,cv.clientWidth/2,cv.clientHeight/2);
 $('#btnSide').onclick=()=>$('#side').classList.toggle('open');
 new ResizeObserver(ukurCanvas).observe($('#stage'));new ResizeObserver(()=>{if(E.open)eUkur()}).observe($('#ewrap'));
-(async()=>{await openDB();S.peta=await dbAll('peta');S.bidang=await dbAll('bidang');
+(async()=>{await openDB();S.peta=await dbAll('peta');S.bidang=await dbAll('bidang');S.antrian=(await dbAll('antrian')).filter(a=>a.img).sort((a,b)=>a.dibuat-b.dibuat);
   if(!db)toast('Penyimpanan browser tidak tersedia – data hanya bertahan selama halaman terbuka. Rajin pakai Data ▸ Cadangkan.',6000);
   const a=lsGet('puzzleSU.aktif');S.aktif=S.peta.some(p=>p.id===a)?a:(S.peta[0]?.id||null);renderSel();renderSide();ukurCanvas();fit()})();
 </script>
