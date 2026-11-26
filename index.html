@@ -386,6 +386,10 @@ function renderSide(pesan,kosong){
     <div class="row" style="margin-top:6px"><button id="r90m">↺ 90°</button><button id="r90p">↻ 90°</button><button id="sKunci" class="${b.kunci?'on':''}">${b.kunci?'🔒 Terkunci':'🔓 Kunci'}</button></div>
     ${b.luas?'':`<label>Skala (tanpa luas): <span id="sclV">${(b.s*100).toFixed(1)} cm/px</span></label><input type="range" id="scl" min="-3" max="3" step="0.01" value="${Math.log10(b.s)}">`}
     <button id="sReset" style="width:100%;margin-top:8px" ${b.kunci?'disabled':''}>↺ Kembalikan ke posisi perkiraan</button>
+    <label>Ke AutoCAD</label>
+    <button id="aBidang" style="width:100%" title="Polyline seukuran luas asli + nomor pendaftaran">📐 Salin bidang ini ke AutoCAD</button>
+    <button id="aSemua" style="width:100%;margin-top:4px" title="Semua bidang peta ini, posisi sesuai puzzle">📐 Salin semua bidang peta ini</button>
+    <div class="row" style="margin-top:4px"><button id="gSalin" title="Salin gambar potongan, lalu Ctrl+V di AutoCAD">🖼️ Salin gambar</button><button id="gSimpan" title="JPG + world file (.jgw) untuk MAPIINSERT di AutoCAD Map 3D">💾 Simpan gambar</button></div>
     <div class="row" style="margin-top:8px"><button id="sEdit">✏️ Edit SU</button><button id="sDel" class="dan">🗑 Hapus</button></div></div>`}
   h+=`<h3>Daftar bidang (${d.length})</h3><input id="cari" placeholder="cari nomor pendaftaran / NIB" value="${esc(cari)}" style="margin-bottom:6px">`;
   h+=`<div class="list">${fil.length?fil.sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true})).map(b=>`<div class="it ${b===S.sel?'sel':''}" data-id="${b.id}"><i class="dot" style="background:${COL[b.status]}"></i>${esc(b.no)}<small>${b.luas?b.luas+' m²':''}</small></div>`).join(''):'<div class="empty">Belum ada bidang.</div>'}</div>`;
@@ -411,6 +415,10 @@ function renderSide(pesan,kosong){
   on('scl','change',()=>simpanBidang(S.sel));
   on('sEdit','click',()=>bukaEditor(S.sel));
   on('sReset','click',()=>kembalikanPerkiraan(S.sel));
+  on('aBidang','click',()=>salinKeAcad([S.sel]));
+  on('aSemua','click',()=>salinKeAcad(bidangAktif()));
+  on('gSalin','click',()=>salinGambar(S.sel));
+  on('gSimpan','click',()=>simpanGambar(S.sel));
   on('pSusun','click',e=>arm(e.target,susunSemua,'Yakin? posisi geseranmu hilang'));
   on('oLanjut','change',e=>{S.opt.lanjut=e.target.checked});
   side.querySelectorAll('.qit[data-q]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.dataset.qx)return;const a=S.antrian.find(x=>x.id===el.dataset.q);if(a&&a.status!=='proses')bukaEditor(null,'',a)}));
@@ -669,6 +677,34 @@ $('#btnBanyak').onclick=()=>$('#fBanyak').click();
 $('#fBanyak').onchange=e=>{masukkanBanyak(e.target.files);e.target.value=''};
 $('#stage').addEventListener('dragover',e=>e.preventDefault());
 $('#stage').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length)masukkanBanyak(e.dataTransfer.files)});
+
+/* ================= KE AUTOCAD (salin polyline & gambar) ================= */
+// Koordinat AutoCAD = koordinat puzzle (meter), Y dibalik. Ukuran bidang sudah sesuai luas.
+const namaAman=t=>String(t).replace(/[^\w\-]+/g,'_');
+function lispBidang(daftar){const f=v=>v.toFixed(4),q=t=>String(t).replace(/["\\]/g,'');
+  const bag=daftar.map(b=>{const lay=b.status==='landing'?'SU_SUDAH_LANDING':'SU_BELUM_LANDING';const v=b.poly.map(p=>keDunia(b,p));
+    return `(entmake (list '(0 . "LWPOLYLINE") '(100 . "AcDbEntity") '(8 . "${lay}") '(100 . "AcDbPolyline") (cons 90 ${v.length}) '(70 . 1) ${v.map(w=>`(list 10 ${f(w[0])} ${f(-w[1])})`).join(' ')}))`+
+      ` (entmake (list '(0 . "TEXT") '(8 . "NO_PENDAFTARAN") (list 10 ${f(b.x)} ${f(-b.y)} 0.0) '(40 . 1.5) '(1 . "${q(b.no)}") '(72 . 1) '(73 . 2) (list 11 ${f(b.x)} ${f(-b.y)} 0.0)))`});
+  return `(progn ${bag.join(' ')} (princ "\\nPuzzle SU: ${daftar.length} bidang digambar. Ketik ZOOM lalu E bila belum terlihat.") (princ))`}
+async function salinTeks(t){try{await navigator.clipboard.writeText(t);return true}catch(e){}
+  const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;left:-9999px';document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy')}catch(e){}ta.remove();return ok}
+async function salinKeAcad(daftar){if(!daftar.length)return;const ok=await salinTeks(lispBidang(daftar));
+  const L=daftar.reduce((s,b)=>s+luasPoly(b.poly)*b.s*b.s,0);
+  toast(ok?`Tersalin ${daftar.length} bidang (${Math.round(L)} m²). Di AutoCAD: klik command line, Ctrl+V, Enter. Lalu MOVE/ROTATE ke lokasinya.`:'Browser menolak menyalin. Buka aplikasi dari kanademonday.github.io/puzzle_su lalu coba lagi.',6000)}
+function dataKeBlob(u){const [h,d]=u.split(','),m=h.match(/:(.*?);/)[1],b=atob(d),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return new Blob([a],{type:m})}
+async function dataGambar(b){const r=await dbGet('img',b.img);if(!r)throw new Error('Gambar bidang tidak ditemukan');return r.data}
+async function salinGambar(b){try{const d=await dataGambar(b);
+    const png=await new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.width;c.height=im.height;c.getContext('2d').drawImage(im,0,0);c.toBlob(ok,'image/png')};im.onerror=no;im.src=d});
+    await navigator.clipboard.write([new ClipboardItem({'image/png':png})]);toast('Gambar tersalin. Di AutoCAD: Ctrl+V lalu klik titik sisip (ukurannya perlu diatur sendiri). Agar pas otomatis, pakai 💾 Simpan gambar.',6000)}
+  catch(e){toast('Browser menolak menyalin gambar. Pakai 💾 Simpan gambar.',4000)}}
+async function simpanGambar(b){try{const d=await dataGambar(b);const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=d});
+  // World file: X = A·kol + B·bar + C ; Y = D·kol + E·bar + F (C,F = pusat piksel kiri-atas)
+  const co=Math.cos(b.rot),si=Math.sin(b.rot),s=b.s,w=keDunia(b,[0.5,0.5]);
+  const jgw=[s*co,-s*si,-s*si,-s*co,w[0],-w[1]].map(v=>v.toFixed(10)).join('\r\n')+'\r\n';
+  const nm=namaAman(`${petaAktif()?.nama||'peta'}_${b.no}`);
+  download(nm+'.jpg',dataKeBlob(d));setTimeout(()=>download(nm+'.jgw',jgw,'text/plain'),700);
+  toast(`Diunduh ${nm}.jpg + ${nm}.jgw (${im.width}×${im.height} px). Di AutoCAD Map 3D: MAPIINSERT → pilih .jpg → Correlation: World file. Gambar langsung pas dengan polyline.`,8000)}
+  catch(e){toast('Gagal menyimpan gambar: '+e.message,4000)}}
 
 /* ================= EKSPOR / IMPOR ================= */
 const tgl=()=>new Date().toISOString().slice(0,10);
