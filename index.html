@@ -442,7 +442,11 @@ $('#bEFit').onclick=eFit;
 const pilihImg=()=>$('#fImg').click();$('#bImg').onclick=pilihImg;$('#bImg2').onclick=pilihImg;
 $('#fImg').onchange=e=>{bacaFile(e.target.files[0]);e.target.value=''};
 $('#ewrap').addEventListener('dragover',e=>e.preventDefault());$('#ewrap').addEventListener('drop',e=>{e.preventDefault();bacaFile(e.dataTransfer.files[0])});
-window.addEventListener('paste',e=>{if(!E.open)return;const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(it){e.preventDefault();bacaFile(it.getAsFile())}});
+window.addEventListener('paste',e=>{if(!E.open)return;
+  // tempel ke kotak isian = teks (Excel juga menaruh gambar sel di clipboard)
+  const t=e.target;if(t&&(/INPUT|TEXTAREA|SELECT/.test(t.tagName)||t.isContentEditable))return;
+  if((e.clipboardData?.types||[]).includes('text/plain')&&E.img)return;
+  const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(it){e.preventDefault();bacaFile(it.getAsFile())}});
 $('#fNo').addEventListener('input',eDraw);
 $('#eCancel').onclick=tutupEditor;
 window.addEventListener('keydown',e=>{if(E.open&&e.key==='Escape'&&$('#pop').hidden)tutupEditor()});
