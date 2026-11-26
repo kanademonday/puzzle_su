@@ -163,7 +163,8 @@ aside h3:first-child{margin-top:0}
       <label class="stb"><input type="radio" name="fSt" value="belum" checked><span>Belum landing</span></label>
       <label class="stl"><input type="radio" name="fSt" value="landing"><span>Sudah landing</span></label>
     </div>
-    <label class="chk" style="color:#8b5a2b;font-weight:600;margin-top:6px"><input type="checkbox" id="fTdk"> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>
+    <label class="chk" style="color:#0891b2;font-weight:600;margin-top:6px"><input type="checkbox" id="fOff"> Sudah dilandingkan offline (sudah kuproses)</label>
+    <label class="chk" style="color:#8b5a2b;font-weight:600"><input type="checkbox" id="fTdk"> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>
     <label>Luas (m²) – dipakai agar ukuran puzzle sebanding</label>
     <input id="fLuas" type="number" min="0" step="any" placeholder="dari BT/SU">
     <div class="row">
@@ -241,10 +242,12 @@ const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const norm=n=>String(n||'').toUpperCase().replace(/\s+/g,'');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c',kand2:'#7c3aed',kand3:'#1e3a8a',tdk:'#8b5a2b'};
+const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c',kand2:'#7c3aed',kand3:'#1e3a8a',tdk:'#8b5a2b',off:'#0891b2'};
 // warna bidang: coklat = belum landing tapi tidak ada di daftar spreadsheet (tidak bisa dipakai)
-const wB=b=>b.tidakAda&&b.status!=='landing'?COL.tdk:COL[b.status];
-const stTeks=b=>b.status==='landing'?'sudah landing':b.tidakAda?'tidak ada di spreadsheet':'belum landing';
+// biru muda = belum landing di Bhumi tapi sudah dilandingkan/diproses offline
+const wB=b=>b.status==='landing'?COL.landing:b.offline?COL.off:b.tidakAda?COL.tdk:COL.belum;
+const khusus=b=>b.status!=='landing'&&(b.offline||b.tidakAda); // tidak dipudarkan di mode Landing
+const stTeks=b=>b.status==='landing'?'sudah landing':b.offline?'sudah dilandingkan offline':b.tidakAda?'tidak ada di spreadsheet':'belum landing';
 let toastT;function toast(m,ms=2800){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),ms)}
 function arm(btn,fn,txt='Yakin? klik lagi'){ // konfirmasi 2x klik (tanpa confirm())
   if(btn.dataset.arm){delete btn.dataset.arm;btn.textContent=btn.dataset.o;fn();return}
@@ -385,7 +388,7 @@ function jarakBidang(A,B){const a=A.poly.map(q=>keDunia(A,q)),b=B.poly.map(q=>ke
 function hubung(a,b){if(jarakBidang(a,b)<=TOL_DEMPET)return 'dempet';
   if((a.tetangga||[]).some(t=>norm(t.no)===norm(b.no))||(b.tetangga||[]).some(t=>norm(t.no)===norm(a.no)))return 'su';return null}
 // tingkat 1: menempel bidang sudah landing • tingkat 2: menempel tingkat 1 • tingkat 3: menempel tingkat 2, dan semua yang menyambung terus darinya tetap tingkat 3
-function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'),B=d.filter(b=>b.status!=='landing'),hasil=[],lv1=[];
+function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'||b.offline),B=d.filter(b=>b.status!=='landing'&&!b.offline),hasil=[],lv1=[];
   const cek=(b,acuan,level)=>{const dempet=[],su=[];for(const l of acuan){const h=hubung(b,l);if(h==='dempet')dempet.push(l);else if(h==='su')su.push(l)}
     if(dempet.length||su.length){if(!b.tidakAda)hasil.push({b,dempet,su,level});return true}return false}; // coklat: tidak dipakai, tapi tetap penyambung
   B.forEach(b=>{if(cek(b,L,1))lv1.push(b)});const lv2=[];B.forEach(b=>{if(!lv1.includes(b)&&cek(b,lv1,2))lv2.push(b)});
@@ -413,7 +416,7 @@ function draw(){
   for(const b of urut){
     ctx.setTransform(DPR*v.z,0,0,DPR*v.z,DPR*v.x,DPR*v.y);
     ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.rot);ctx.scale(b.s,b.s);ctx.translate(-b.c[0],-b.c[1]);
-    const kd=kMap&&kMap.get(b),redup=kMap&&b.status!=='landing'&&!kd&&!b.tidakAda,warna=kd?wK(kd):wB(b);if(redup)ctx.globalAlpha=.2;if(b.tidakAda&&b.status!=='landing')ctx.setLineDash([6/(v.z*b.s),4/(v.z*b.s)]);
+    const kd=kMap&&kMap.get(b),redup=kMap&&b.status!=='landing'&&!kd&&!khusus(b),warna=kd?wK(kd):wB(b);if(redup)ctx.globalAlpha=.2;if(b.tidakAda&&!b.offline&&b.status!=='landing')ctx.setLineDash([6/(v.z*b.s),4/(v.z*b.s)]);
     pathPoly(ctx,b.poly);const im=S.opt.img?ambilGambar(b.img):null;
     if(im){ctx.save();ctx.clip();ctx.globalAlpha=S.opt.alpha*(redup?.2:1);ctx.drawImage(im,0,0);ctx.restore()}
     ctx.fillStyle=warna+(im?(kd?'40':'26'):'55');ctx.fill();
@@ -435,7 +438,7 @@ function draw(){
       ctx.strokeStyle='#f59e0b';ctx.lineWidth=2.5;k.titik.forEach(t=>{const a=w2s(t.w);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(s[0],s[1]);ctx.stroke();ctx.fillStyle='#f59e0b';ctx.beginPath();ctx.arc(a[0],a[1],5,0,7);ctx.fill()})}
     label(k.no,s[0],s[1],pilih?'#fff':'#4b5160',pilih?'#f59e0bf0':'#f1f2f4e6',pilih?13:11,pilih)});
   // nomor pendaftaran tiap bidang
-  for(const b of urut){const s=w2s([b.x,b.y]),kd=kMap&&kMap.get(b);if(kMap&&b.status!=='landing'&&!kd&&!b.tidakAda)ctx.globalAlpha=.35;
+  for(const b of urut){const s=w2s([b.x,b.y]),kd=kMap&&kMap.get(b);if(kMap&&b.status!=='landing'&&!kd&&!khusus(b))ctx.globalAlpha=.35;
     label(b.no,s[0],s[1],'#fff',(b===S.sel?COL.sel:kd?wK(kd):wB(b))+'f0',13);ctx.globalAlpha=1}
   // tetangga yang dicatat dari SU bidang terpilih (termasuk yang sudah didigitasi)
   if(S.sel&&daftar.includes(S.sel))(S.sel.tetangga||[]).forEach(t=>{const s=w2s(keDunia(S.sel,[t.x,t.y]));
@@ -499,10 +502,10 @@ function renderSide(pesan,kosong){
     if(d.length>1)h+=`<label class="chk"><input type="checkbox" id="oAuto" ${S.opt.autoSusun?'checked':''}> Susun ulang otomatis tiap ada bidang baru</label>`}
   else h+=`<div class="empty">Belum ada. Peta analog dibuat saat menyimpan bidang pertama.</div>`;
   h+=`<div class="stats"><div class="stat"><b>${d.length}</b><span>bidang</span></div><div class="stat"><b style="color:${COL.landing}">${nL}</b><span>sudah landing</span></div><div class="stat"><b style="color:${COL.belum}">${d.length-nL}</b><span>belum landing</span></div></div>`;
-  h+=`<div class="legend"><span><i class="dot" style="background:${COL.landing}"></i>Sudah landing</span><span><i class="dot" style="background:${COL.belum}"></i>Belum landing</span><span><i class="dot" style="background:${COL.tdk}"></i>Tidak ada di spreadsheet</span><span><i class="dot" style="border:2px dashed ${COL.kosong}"></i>Tetangga belum ada SU</span></div>`;
+  h+=`<div class="legend"><span><i class="dot" style="background:${COL.landing}"></i>Sudah landing</span><span><i class="dot" style="background:${COL.belum}"></i>Belum landing</span><span><i class="dot" style="background:${COL.off}"></i>Sudah dilandingkan offline</span><span><i class="dot" style="background:${COL.tdk}"></i>Tidak ada di spreadsheet</span><span><i class="dot" style="border:2px dashed ${COL.kosong}"></i>Tetangga belum ada SU</span></div>`;
   if(S.modeLanding){const k=kandidatLanding();
     const n1=k.filter(x=>x.level===1).length,n2=k.filter(x=>x.level===2).length,n3=k.length-n1-n2,wl=l=>l===1?COL.kand:l===2?COL.kand2:COL.kand3;
-    h+=`<h3>🎯 Kandidat landing (${k.length})</h3><div class="empty" style="padding:0 0 6px"><i class="dot" style="display:inline-block;background:${COL.kand}"></i> <b>Tingkat 1 (${n1})</b>: menempel langsung dengan bidang sudah landing.<br>
+    h+=`<h3>🎯 Kandidat landing (${k.length})</h3><div class="empty" style="padding:0 0 6px"><i class="dot" style="display:inline-block;background:${COL.kand}"></i> <b>Tingkat 1 (${n1})</b>: menempel langsung dengan bidang sudah landing atau sudah dilandingkan offline.<br>
       <i class="dot" style="display:inline-block;background:${COL.kand2}"></i> <b>Tingkat 2 (${n2})</b>: menempel dengan bidang tingkat 1.<br>
       <i class="dot" style="display:inline-block;background:${COL.kand3}"></i> <b>Tingkat 3 (${n3})</b>: menempel dengan bidang tingkat 2, dan semua yang menyambung terus darinya.<br><span style="font-size:11px">Menempel = berdempetan di puzzle, atau bertetangga menurut SU.</span></div>
     <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${wl(x.level)}"></i>${esc(x.b.no)}<small>${x.level>1?'T'+x.level+' lewat ':''}${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
@@ -527,7 +530,8 @@ function renderSide(pesan,kosong){
       return `<button class="chip" data-tn="${esc(norm(t.no))}" style="${gaya}" title="${o?(o.status==='landing'?'sudah didigitasi, sudah landing':'sudah didigitasi, belum landing'):'belum ada SU-nya'}">${esc(t.no)}</button>`}).join('')}</div>
       <div style="font-size:11px;color:var(--mut);margin-top:3px">hijau = sudah landing • oranye = belum landing • putus-putus = belum ada SU</div>`:'<div class="empty" style="padding:0">Tidak ada nomor tetangga tercatat.</div>'}
     <div class="radio" style="margin-top:8px"><label class="stb"><input type="radio" name="sSt" value="belum" ${b.status!=='landing'?'checked':''}><span>Belum landing</span></label><label class="stl"><input type="radio" name="sSt" value="landing" ${b.status==='landing'?'checked':''}><span>Sudah landing</span></label></div>
-    ${b.status!=='landing'?`<label class="chk" style="margin-top:6px;color:#8b5a2b;font-weight:600"><input type="checkbox" id="sTdk" ${b.tidakAda?'checked':''}> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>`:''}
+    ${b.status!=='landing'?`<label class="chk" style="margin-top:6px;color:${COL.off};font-weight:600"><input type="checkbox" id="sOff" ${b.offline?'checked':''}> Sudah dilandingkan offline (sudah kuproses)</label>
+      <label class="chk" style="color:#8b5a2b;font-weight:600"><input type="checkbox" id="sTdk" ${b.tidakAda?'checked':''}> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>`:''}
     <label>Putar: <span id="selRotV"></span></label><input type="range" id="selRot" min="0" max="360" step="0.5">
     <div class="row" style="margin-top:6px"><button id="r90m">↺ 90°</button><button id="r90p">↻ 90°</button><button id="sKunci" class="${b.kunci?'on':''}">${b.kunci?'🔒 Terkunci':'🔓 Kunci'}</button></div>
     ${b.luas?'':`<label>Skala (tanpa luas): <span id="sclV">${(b.s*100).toFixed(1)} cm/px</span></label><input type="range" id="scl" min="-3" max="3" step="0.01" value="${Math.log10(b.s)}">`}
@@ -538,7 +542,7 @@ function renderSide(pesan,kosong){
     <div class="row" style="margin-top:4px"><button id="gSalin" title="Salin gambar potongan, lalu Ctrl+V di AutoCAD">🖼️ Salin gambar</button><button id="gSimpan" title="JPG + world file (.jgw) untuk MAPIINSERT di AutoCAD Map 3D">💾 Simpan gambar</button></div>
     <div class="row" style="margin-top:8px"><button id="sEdit">✏️ Edit SU</button><button id="sDel" class="dan">🗑 Hapus</button></div></div>`}
   h+=`<h3>Daftar bidang (${d.length})</h3><input id="cari" placeholder="cari nomor pendaftaran / NIB" value="${esc(cari)}" style="margin-bottom:6px">`;
-  h+=`<div class="list">${fil.length?fil.sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true})).map(b=>`<div class="it ${b===S.sel?'sel':''}" data-id="${b.id}"><i class="dot" style="background:${wB(b)}"></i>${esc(b.no)}<small>${b.tidakAda&&b.status!=='landing'?'tidak ada di spreadsheet • ':''}${b.luas?b.luas+' m²':''}</small></div>`).join(''):'<div class="empty">Belum ada bidang.</div>'}</div>`;
+  h+=`<div class="list">${fil.length?fil.sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true})).map(b=>`<div class="it ${b===S.sel?'sel':''}" data-id="${b.id}"><i class="dot" style="background:${wB(b)}"></i>${esc(b.no)}<small>${khusus(b)?stTeks(b)+' • ':''}${b.luas?b.luas+' m²':''}</small></div>`).join(''):'<div class="empty">Belum ada bidang.</div>'}</div>`;
   const ks=[...info.kosong.values()].sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true}));
   h+=`<h3>Tetangga belum ada SU (${ks.length})</h3><div class="list">${ks.length?ks.map(k=>`<div class="it" data-k="${esc(norm(k.no))}"><i class="dot" style="border:2px dashed ${COL.kosong}"></i>${esc(k.no)}<small>dari ${k.titik.map(t=>esc(t.pemilik.no)).join(', ')}</small></div>`).join(''):'<div class="empty">Tidak ada.</div>'}</div>`;
   h+=`<h3>Tampilan</h3>
@@ -556,7 +560,8 @@ function renderSide(pesan,kosong){
   on('selRot','change',()=>simpanBidang(S.sel));
   on('r90m','click',()=>{if(S.sel.kunci)return;S.sel.rot-=Math.PI/2;simpanBidang(S.sel);updRot();draw()});
   on('r90p','click',()=>{if(S.sel.kunci)return;S.sel.rot+=Math.PI/2;simpanBidang(S.sel);updRot();draw()});
-  on('sTdk','change',e=>{S.sel.tidakAda=e.target.checked;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai coklat: tidak ada di spreadsheet`:`Tanda coklat bidang ${S.sel.no} dihapus`,2500)});
+  on('sOff','change',e=>{S.sel.offline=e.target.checked;if(e.target.checked)S.sel.tidakAda=false;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai biru muda: sudah dilandingkan offline`:`Tanda offline bidang ${S.sel.no} dihapus`,2500)});
+  on('sTdk','change',e=>{S.sel.tidakAda=e.target.checked;if(e.target.checked)S.sel.offline=false;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai coklat: tidak ada di spreadsheet`:`Tanda coklat bidang ${S.sel.no} dihapus`,2500)});
   on('sKunci','click',()=>{S.sel.kunci=!S.sel.kunci;simpanBidang(S.sel);renderSide();draw()});
   on('scl','input',e=>{S.sel.s=Math.pow(10,+e.target.value);$('#sclV').textContent=(S.sel.s*100).toFixed(1)+' cm/px';draw()});
   on('scl','change',()=>simpanBidang(S.sel));
@@ -589,7 +594,7 @@ function renderSide(pesan,kosong){
 const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null,saran:[],draft:null,stack:[],hi:0,halState:{}};
 const ecv=$('#ecv'),ectx=ecv.getContext('2d');
 function bukaEditor(b,noAwal,draft){
-  E.open=true;E.b=b;E.draft=draft||null;E.konfSU=null;$('#fTdk').checked=!!(b&&b.tidakAda);E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
+  E.open=true;E.b=b;E.draft=draft||null;E.konfSU=null;$('#fTdk').checked=!!(b&&b.tidakAda);$('#fOff').checked=!!(b&&b.offline);E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
   $('#eTitle').textContent=b?'Edit bidang '+b.no:draft?'Digitasi SU dari antrian – '+draft.nama:'Tambah bidang dari SU';
   const p=b?S.peta.find(x=>x.id===b.petaId):petaAktif();
   $('#fPeta').value=draft&&draft.petaNama?draft.petaNama:p?p.nama:'';$('#fNo').value=b?b.no:draft?(draft.no||''):(noAwal||'');
@@ -693,6 +698,7 @@ window.addEventListener('paste',e=>{if(!E.open)return;
   const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(it){e.preventDefault();bacaFile(it.getAsFile())}});
 $('#fNo').addEventListener('input',eDraw);
 $('#eCancel').onclick=tutupEditor;
+$('#fOff').onchange=e=>{if(e.target.checked)$('#fTdk').checked=false};$('#fTdk').onchange=e=>{if(e.target.checked)$('#fOff').checked=false};
 window.addEventListener('keydown',e=>{if(E.open&&e.key==='Escape'&&$('#pop').hidden)tutupEditor()});
 $('#eSave').onclick=()=>{
   if(!$('#pop').hidden)okPop();
@@ -711,7 +717,7 @@ $('#eSave').onclick=()=>{
   const lama=E.b,baru=!lama,ganti=lama&&lama.petaId!==p.id;
   const b=lama||{id:uid(),dibuat:Date.now(),kunci:false};
   if(E.imgData){if(b.img)dbDel('img',b.img);b.img=uid();dbPut('img',{id:b.img,data:E.imgData});imgEl.delete(b.img)}
-  const cLama=b.c;b.petaId=p.id;b.no=no;b.status=document.querySelector('input[name=fSt]:checked').value;b.tidakAda=b.status!=='landing'&&$('#fTdk').checked;
+  const cLama=b.c;b.petaId=p.id;b.no=no;b.status=document.querySelector('input[name=fSt]:checked').value;b.offline=b.status!=='landing'&&$('#fOff').checked;b.tidakAda=b.status!=='landing'&&!b.offline&&$('#fTdk').checked;
   b.luas=parseFloat($('#fLuas').value)||0;b.nib=$('#fNib').value.trim();b.su=$('#fSu').value.trim();b.catatan=$('#fCat').value.trim();
   b.poly=E.poly.map(q=>[+q[0].toFixed(2),+q[1].toFixed(2)]);b.tetangga=E.tet.filter(t=>t.no.trim()).map(t=>({no:t.no.trim(),x:+t.x.toFixed(2),y:+t.y.toFixed(2)}));
   b.c=pusat(b.poly);b.s=hitungSkala(b);if(E.draft)b.berkas=E.draft.nama;
@@ -926,7 +932,7 @@ $('#stage').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.fil
 // Koordinat AutoCAD = koordinat puzzle (meter), Y dibalik. Ukuran bidang sudah sesuai luas.
 const namaAman=t=>String(t).replace(/[^\w\-]+/g,'_');
 function lispBidang(daftar){const f=v=>v.toFixed(4),q=t=>String(t).replace(/["\\]/g,'');
-  const bag=daftar.map(b=>{const lay=b.status==='landing'?'SU_SUDAH_LANDING':b.tidakAda?'SU_TIDAK_ADA_SPREADSHEET':'SU_BELUM_LANDING';const v=b.poly.map(p=>keDunia(b,p));
+  const bag=daftar.map(b=>{const lay=b.status==='landing'?'SU_SUDAH_LANDING':b.offline?'SU_LANDING_OFFLINE':b.tidakAda?'SU_TIDAK_ADA_SPREADSHEET':'SU_BELUM_LANDING';const v=b.poly.map(p=>keDunia(b,p));
     return `(entmake (list '(0 . "LWPOLYLINE") '(100 . "AcDbEntity") '(8 . "${lay}") '(100 . "AcDbPolyline") (cons 90 ${v.length}) '(70 . 1) ${v.map(w=>`(list 10 ${f(w[0])} ${f(-w[1])})`).join(' ')}))`+
       ` (entmake (list '(0 . "TEXT") '(8 . "NO_PENDAFTARAN") (list 10 ${f(b.x)} ${f(-b.y)} 0.0) '(40 . 1.5) '(1 . "${q(b.no)}") '(72 . 1) '(73 . 2) (list 11 ${f(b.x)} ${f(-b.y)} 0.0)))`});
   return `(progn ${bag.join(' ')} (princ "\\nPuzzle SU: ${daftar.length} bidang digambar. Ketik ZOOM lalu E bila belum terlihat.") (princ))`}
@@ -990,7 +996,7 @@ function imporJSON(f){const rd=new FileReader();rd.onload=()=>{try{const d=JSON.
   if(!S.aktif&&S.peta[0])S.aktif=S.peta[0].id;renderSel();renderSide();fit();toast(`Impor selesai: ${nb} bidang masuk${nl?`, ${nl} dilewati (versi lokal lebih baru)`:''}`,4000)}catch(e){toast('Gagal impor: '+e.message,4000)}};rd.readAsText(f)}
 function eksporDXF(){const d=bidangAktif();if(!d.length)return toast('Peta ini belum punya bidang');const o=['0','SECTION','2','ENTITIES'];const f=n=>(+n).toFixed(3);
   const teks=(lay,x,y,h,t)=>o.push('0','TEXT','8',lay,'10',f(x),'20',f(-y),'30','0','40',h,'1',String(t),'72','1','73','2','11',f(x),'21',f(-y),'31','0');
-  d.forEach(b=>{const lay=b.status==='landing'?'SU_SUDAH_LANDING':b.tidakAda?'SU_TIDAK_ADA_SPREADSHEET':'SU_BELUM_LANDING';o.push('0','POLYLINE','8',lay,'66','1','70','1','10','0','20','0','30','0');
+  d.forEach(b=>{const lay=b.status==='landing'?'SU_SUDAH_LANDING':b.offline?'SU_LANDING_OFFLINE':b.tidakAda?'SU_TIDAK_ADA_SPREADSHEET':'SU_BELUM_LANDING';o.push('0','POLYLINE','8',lay,'66','1','70','1','10','0','20','0','30','0');
     b.poly.forEach(q=>{const w=keDunia(b,q);o.push('0','VERTEX','8',lay,'10',f(w[0]),'20',f(-w[1]),'30','0')});o.push('0','SEQEND','8',lay);teks('NO_PENDAFTARAN',b.x,b.y,'2',b.no)});
   infoTetangga(d).kosong.forEach(k=>k.titik.forEach(t=>teks('TETANGGA_BELUM_ADA_SU',t.w[0],t.w[1],'1.5',k.no)));
   o.push('0','ENDSEC','0','EOF');download(`${petaAktif().nama.replace(/[^\w\- ]+/g,'_')}.dxf`,o.join('\r\n'),'application/dxf');
