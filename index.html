@@ -375,7 +375,7 @@ function renderSide(pesan,kosong){
   if(S.antrian.length){const q=S.antrian;
     h+=`<h3>Antrian SU (${q.length})</h3><div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
       <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':a.pesan?'⚠ '+esc(a.pesan):'siap digitasi'}</span></div>
-      ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button>`:''}</div>`).join('')}</div>
+      ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button><button class="x" style="right:30px" data-qr="${a.id}" title="Baca ulang otomatis">↻</button>`:''}</div>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="oLanjut" ${S.opt.lanjut?'checked':''}> Setelah simpan, langsung buka SU berikutnya</label>`}
   if(S.sel&&d.includes(S.sel)){const b=S.sel;
     h+=`<h3>Bidang terpilih</h3><div class="selbox"><div class="ttl">${esc(b.no)}</div>
@@ -420,8 +420,9 @@ function renderSide(pesan,kosong){
   on('gSalin','click',()=>salinGambar(S.sel));
   on('gSimpan','click',()=>simpanGambar(S.sel));
   on('pSusun','click',e=>arm(e.target,susunSemua,'Yakin? posisi geseranmu hilang'));
+  side.querySelectorAll('[data-qr]').forEach(el=>el.addEventListener('click',()=>{const a=S.antrian.find(x=>x.id===el.dataset.qr);if(a)bacaUlang(a)}));
   on('oLanjut','change',e=>{S.opt.lanjut=e.target.checked});
-  side.querySelectorAll('.qit[data-q]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.dataset.qx)return;const a=S.antrian.find(x=>x.id===el.dataset.q);if(a&&a.status!=='proses')bukaEditor(null,'',a)}));
+  side.querySelectorAll('.qit[data-q]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.dataset.qx||ev.target.dataset.qr)return;const a=S.antrian.find(x=>x.id===el.dataset.q);if(a&&a.status!=='proses')bukaEditor(null,'',a)}));
   side.querySelectorAll('[data-qx]').forEach(el=>el.addEventListener('click',()=>arm(el,()=>{S.antrian=S.antrian.filter(x=>x.id!==el.dataset.qx);dbDel('antrian',el.dataset.qx);renderSide()},'?')));
   on('sDel','click',e=>arm(e.target,()=>{const b=S.sel;dbDel('bidang',b.id);dbDel('img',b.img);S.bidang=S.bidang.filter(x=>x!==b);S.sel=null;renderSide();draw();toast('Bidang '+b.no+' dihapus')}));
   on('cari','input',e=>{S.cari=e.target.value;const pos=e.target.selectionStart;renderSide();const c=$('#cari');c.focus();c.setSelectionRange(pos,pos)});
@@ -559,7 +560,7 @@ $('#eSave').onclick=()=>{
   const cLama=b.c;b.petaId=p.id;b.no=no;b.status=document.querySelector('input[name=fSt]:checked').value;
   b.luas=parseFloat($('#fLuas').value)||0;b.nib=$('#fNib').value.trim();b.su=$('#fSu').value.trim();b.catatan=$('#fCat').value.trim();
   b.poly=E.poly.map(q=>[+q[0].toFixed(2),+q[1].toFixed(2)]);b.tetangga=E.tet.filter(t=>t.no.trim()).map(t=>({no:t.no.trim(),x:+t.x.toFixed(2),y:+t.y.toFixed(2)}));
-  b.c=pusat(b.poly);b.s=hitungSkala(b);
+  b.c=pusat(b.poly);b.s=hitungSkala(b);if(E.draft)b.berkas=E.draft.nama;
   let pesan='';
   if(baru||ganti){const lain=S.bidang.filter(x=>x.petaId===p.id&&x!==b);pesan=letakkanOtomatis(b,lain)}
   else if(cLama&&!E.imgData){/* batas berubah: jaga posisi tetap */}
@@ -650,29 +651,46 @@ let antriProses=Promise.resolve();
 function masukkanBanyak(files){const arr=[...files].filter(f=>/^image\//.test(f.type)||/\.pdf$/i.test(f.name)||f.type==='application/pdf');
   if(!arr.length)return toast('Pilih berkas PDF atau gambar SU');
   const petaNama=petaAktif()?.nama||'';
-  const items=arr.map(f=>{const nf=bacaNamaFile(f.name);return{id:uid(),nama:f.name,petaNama,su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:'',dibuat:Date.now(),f}});
+  const ada=new Map();S.bidang.forEach(b=>{const k=kunciBidang(b);if(k)ada.set(k,'sudah jadi bidang '+b.no);if(b.berkas)ada.set('f:'+b.berkas.toLowerCase(),'sudah jadi bidang '+b.no)});
+  S.antrian.forEach(a=>ada.set(kunciSU(a.su,a.tahun,a.nama),'sudah di antrian'));
+  const lewat=[],baru=[];
+  arr.forEach(f=>{const nf=bacaNamaFile(f.name),k=kunciSU(nf.nomor,nf.tahun,f.name);
+    if(ada.has(k))lewat.push(`${nf.nomor?nf.nomor+'/'+nf.tahun:f.name} (${ada.get(k)})`);else{ada.set(k,'dobel di pilihan ini');baru.push(f)}});
+  if(lewat.length)setTimeout(()=>toast(`${lewat.length} SU dilewati karena sudah ada: ${lewat.slice(0,4).join(', ')}${lewat.length>4?', …':''}`,7000),baru.length?5200:0);
+  if(!baru.length)return;
+  const items=baru.map(f=>{const nf=bacaNamaFile(f.name);return{id:uid(),nama:f.name,petaNama,su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:'',dibuat:Date.now(),f}});
   S.antrian.push(...items);renderSide();
-  toast(`${arr.length} SU masuk antrian${aiSiap()?' – dibaca otomatis satu per satu':' – nomor & tahun dari nama file (AI belum diatur: Data ▸ Pengaturan baca otomatis)'}`,5000);
+  toast(`${baru.length} SU masuk antrian${aiSiap()?' – dibaca otomatis satu per satu':' – nomor & tahun dari nama file (AI belum diatur: Data ▸ Pengaturan baca otomatis)'}`,5000);
   items.forEach(a=>{antriProses=antriProses.then(()=>prosesSatu(a))});
   antriProses.then(()=>toast('Semua SU di antrian selesai dibaca. Klik kartunya untuk digitasi.',5000))}
+async function bacaAI(a,hal,gi){a.pesan='';if(!aiSiap())return gi;let adaGambar=false;
+  for(let i=0;i<hal.length;i++){try{const r=await panggilAI(b64(await ubahUkuran(hal[i],1600)));
+      if(r.nomor_surat_ukur&&!a.su)a.su=String(r.nomor_surat_ukur).trim();if(r.tahun&&!a.tahun)a.tahun=String(r.tahun).trim();
+      if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
+      const gb=r.jenis_halaman==='gambar_bidang'||hal.length===1;
+      if(gb&&!adaGambar){adaGambar=true;gi=i;if(r.nomor_tengah)a.no=String(r.nomor_tengah).trim();
+        a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}}
+    catch(e){a.pesan=e.message;break}}
+  return gi}
 async function prosesSatu(a){const f=a.f;delete a.f;
-  try{let hal=[],pdf=null;
-    if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){const lib=await muatPdfjs();pdf=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+  try{let hal=[];
+    if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){const lib=await muatPdfjs();const pdf=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
       for(let i=1;i<=Math.min(pdf.numPages,6);i++)hal.push(await renderHalaman(pdf,i,2200))}
     else hal=[await ubahUkuran(await keDataURL(f),2200,.88)];
     // format SU biasa: hal 1 isian, hal 2 gambar, hal 3 pengesahan
-    let gi=hal.length>=2?1:0,adaGambar=false;
-    if(aiSiap()){for(let i=0;i<hal.length;i++){try{const r=await panggilAI(b64(await ubahUkuran(hal[i],1600)));
-        if(r.nomor_surat_ukur&&!a.su)a.su=String(r.nomor_surat_ukur).trim();if(r.tahun&&!a.tahun)a.tahun=String(r.tahun).trim();
-        if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
-        const gb=r.jenis_halaman==='gambar_bidang'||hal.length===1;
-        if(gb&&!adaGambar){adaGambar=true;gi=i;if(r.nomor_tengah)a.no=String(r.nomor_tengah).trim();
-          a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}}
-      catch(e){a.pesan=e.message;break}}}
-    a.hal=hal.length>1?hal:null;a.gi=gi;a.img=hal[gi];
-    a.thumb=await ubahUkuran(a.img,260,.7);a.status='siap'}
+    const gi=await bacaAI(a,hal,hal.length>=2?1:0);
+    a.hal=hal.length>1?hal:null;a.gi=gi;a.img=hal[gi];a.thumb=await ubahUkuran(a.img,260,.7);a.status='siap'}
   catch(e){a.status='siap';a.pesan=e.message||'gagal dibaca'}
   if(S.antrian.includes(a)){dbPut('antrian',a);renderSide()}}
+// Tombol ↻ di kartu antrian: baca ulang dari halaman yang sudah tersimpan (kartu lain tetap bisa dikerjakan)
+function bacaUlang(a){if(!a.img)return;const hal=a.hal||[a.img],nf=bacaNamaFile(a.nama);
+  Object.assign(a,{su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:''});renderSide();
+  if(!aiSiap())toast('AI belum diatur (Data ▸ Pengaturan baca otomatis): hanya nama file yang dibaca ulang',4000);
+  antriProses=antriProses.then(async()=>{try{const gi=await bacaAI(a,hal,a.gi||0);a.gi=gi;a.img=hal[gi];a.thumb=await ubahUkuran(a.img,260,.7)}catch(e){a.pesan=e.message}
+    a.status='siap';if(S.antrian.includes(a)){dbPut('antrian',a);renderSide();toast(`Selesai dibaca ulang: ${a.nama}`,2500)}})}
+// Kunci pembeda SU: nomor 5 angka + tahun (nomor sama tapi tahun beda = SU berbeda); tanpa pola di nama file → nama file
+const kunciSU=(su,th,nama)=>su&&th?String(su).padStart(5,'0')+'/'+th:'f:'+String(nama).toLowerCase();
+function kunciBidang(b){const m=String(b.su||'').match(/(\d{1,6})\s*\/\s*(\d{4})/);return m?m[1].padStart(5,'0')+'/'+m[2]:null}
 $('#btnBanyak').onclick=()=>$('#fBanyak').click();
 $('#fBanyak').onchange=e=>{masukkanBanyak(e.target.files);e.target.value=''};
 $('#stage').addEventListener('dragover',e=>e.preventDefault());
