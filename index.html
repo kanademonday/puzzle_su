@@ -113,7 +113,7 @@ aside h3:first-child{margin-top:0}
   <div class="sp"></div>
   <button id="btnDaftar" title="Daftar semua SU yang sudah dimasukkan + cek nama file">📋 Daftar SU</button>
   <button id="btnLanding" title="Tampilkan bidang belum landing yang menempel dengan bidang sudah landing">🎯 Landing</button>
-  <button id="btnBanyak" title="Pilih banyak PDF/gambar SU sekaligus">📥 Banyak SU</button><input type="file" id="fBanyak" multiple accept="application/pdf,.pdf,image/*" hidden>
+  <button id="btnBanyak" title="Cepat: nomor & tahun dari nama file, langsung siap digitasi (tanpa AI)">📥 Banyak SU</button><button id="btnBanyakAI" title="Langsung siap digitasi, lalu AI membaca luas & nomor di belakang sampai selesai">🤖 Banyak SU + AI</button><input type="file" id="fBanyak" multiple accept="application/pdf,.pdf,image/*" hidden>
   <button class="pri" id="btnAdd">+ Bidang dari SU</button>
   <div class="menu">
     <button id="btnMenu">Data ▾</button>
@@ -224,7 +224,7 @@ aside h3:first-child{margin-top:0}
    <div id="cekDrop" style="border:2px dashed #b9c0cc;border-radius:10px;padding:14px;text-align:center;color:var(--mut)">Seret PDF ke sini atau <button id="cekPilih" type="button">Pilih PDF</button><input type="file" id="fCek" multiple accept="application/pdf,.pdf,image/*" hidden></div>
    <div id="cekRingkas" style="margin:8px 0;font-size:13px"></div>
    <div style="flex:1;overflow:auto;border:1px solid var(--line);border-radius:8px"><table id="cekTab" style="width:100%;border-collapse:collapse;font-size:12px"></table></div>
-   <button class="pri" id="cekMasuk" style="margin-top:8px" hidden></button>
+   <button class="pri" id="cekMasuk" style="margin-top:8px" hidden></button><button id="cekMasukAI" style="margin-top:4px" hidden>🤖 Masukkan + baca AI di belakang</button>
   </div>
  </div></div></div>
 <div id="toast"></div>
@@ -421,7 +421,11 @@ function draw(){
     if(S.opt.garis){ctx.setLineDash([2,4]);ctx.strokeStyle='#8a8f9888';ctx.lineWidth=1;k.titik.forEach(t=>{const a=w2s(t.w);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(s[0],s[1]);ctx.stroke()})}
     ctx.setLineDash([5,4]);ctx.strokeStyle=COL.kosong;ctx.lineWidth=1.5;ctx.fillStyle='#e9ebef66';ctx.beginPath();
     if(h>16)ctx.rect(s[0]-h,s[1]-h,2*h,2*h);else ctx.arc(s[0],s[1],15,0,7);ctx.fill();ctx.stroke();ctx.setLineDash([]);
-    label(k.no,s[0],s[1],'#4b5160','#f1f2f4e6',11,false)});
+    const pilih=S.kosongSel===norm(k.no);
+    if(pilih){ctx.strokeStyle='#f59e0b';ctx.lineWidth=3;ctx.setLineDash([]);[...new Set(k.titik.map(t=>t.pemilik))].forEach(b=>{ctx.save();ctx.setTransform(DPR*v.z,0,0,DPR*v.z,DPR*v.x,DPR*v.y);
+        ctx.translate(b.x,b.y);ctx.rotate(b.rot);ctx.scale(b.s,b.s);ctx.translate(-b.c[0],-b.c[1]);pathPoly(ctx,b.poly);ctx.lineWidth=5/(v.z*b.s);ctx.strokeStyle='#f59e0b';ctx.stroke();ctx.restore()});
+      ctx.strokeStyle='#f59e0b';ctx.lineWidth=2.5;k.titik.forEach(t=>{const a=w2s(t.w);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(s[0],s[1]);ctx.stroke();ctx.fillStyle='#f59e0b';ctx.beginPath();ctx.arc(a[0],a[1],5,0,7);ctx.fill()})}
+    label(k.no,s[0],s[1],pilih?'#fff':'#4b5160',pilih?'#f59e0bf0':'#f1f2f4e6',pilih?13:11,pilih)});
   // nomor pendaftaran tiap bidang
   for(const b of urut){const s=w2s([b.x,b.y]),kd=kMap&&kMap.get(b);if(kMap&&b.status!=='landing'&&!kd)ctx.globalAlpha=.35;
     label(b.no,s[0],s[1],'#fff',(b===S.sel?COL.sel:kd?wK(kd):COL[b.status])+'f0',13);ctx.globalAlpha=1}
@@ -437,7 +441,7 @@ function fit(){const d=bidangAktif();if(!d.length){S.view={x:cv.clientWidth/2,y:
   d.forEach(b=>b.poly.forEach(q=>add(keDunia(b,q))));{const gS=ukuranBayangan(d);infoTetangga(d).kosong.forEach(k=>add(posKosong(k,gS)))}
   const W=cv.clientWidth,H=cv.clientHeight,pad=60,z=Math.min((W-pad*2)/Math.max(x1-x0,1),(H-pad*2)/Math.max(y1-y0,1));
   S.view={z,x:W/2-(x0+x1)/2*z,y:H/2-(y0+y1)/2*z};draw()}
-function fokus(b){S.sel=b;const W=cv.clientWidth,H=cv.clientHeight;S.view.x=W/2-b.x*S.view.z;S.view.y=H/2-b.y*S.view.z;renderSide();draw()}
+function fokus(b){S.sel=b;S.kosongSel=null;const W=cv.clientWidth,H=cv.clientHeight;S.view.x=W/2-b.x*S.view.z;S.view.y=H/2-b.y*S.view.z;renderSide();draw()}
 function zoomDi(f,sx,sy){const w=s2w(sx,sy);S.view.z=Math.min(200,Math.max(.01,S.view.z*f));S.view.x=sx-w[0]*S.view.z;S.view.y=sy-w[1]*S.view.z;draw()}
 function hit(w){const d=bidangAktif();if(S.sel&&d.includes(S.sel)&&diDalam(keLokal(S.sel,w),S.sel.poly))return S.sel;
   for(let i=d.length-1;i>=0;i--)if(diDalam(keLokal(d[i],w),d[i].poly))return d[i];return null}
@@ -450,7 +454,7 @@ let P=null;
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);const r=cv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,w=s2w(sx,sy);
   if(S.sel&&S.sel.petaId===S.aktif&&!S.sel.kunci){const h=w2s(posHandle(S.sel));if(Math.hypot(h[0]-sx,h[1]-sy)<12){P={m:'rot',b:S.sel};return}}
   const b=hit(w);
-  if(b&&e.button===0){S.sel=b;P={m:b.kunci?'pan':'move',b,dx:w[0]-b.x,dy:w[1]-b.y,sx,sy,vx:S.view.x,vy:S.view.y,gerak:false};renderSide();draw();return}
+  if(b&&e.button===0){S.sel=b;S.kosongSel=null;P={m:b.kunci?'pan':'move',b,dx:w[0]-b.x,dy:w[1]-b.y,sx,sy,vx:S.view.x,vy:S.view.y,gerak:false};renderSide();draw();return}
   const k=hitKosong(w);if(k){P=null;tawarKosong(k);return}
   P={m:'pan',sx,sy,vx:S.view.x,vy:S.view.y,gerak:false,klikKosong:true}});
 cv.addEventListener('pointermove',e=>{if(!P)return;const r=cv.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top,w=s2w(sx,sy);
@@ -460,7 +464,7 @@ cv.addEventListener('pointermove',e=>{if(!P)return;const r=cv.getBoundingClientR
 cv.addEventListener('pointerup',()=>{if(!P)return;
   if(P.m==='move'&&P.gerak){if(snap(P.b))toast('Titik sudut menempel ke bidang tetangga',1500);simpanBidang(P.b)}
   if(P.m==='rot')simpanBidang(P.b);
-  if(P.klikKosong&&!P.gerak&&S.sel){S.sel=null;renderSide()}P=null;draw()});
+  if(P.klikKosong&&!P.gerak&&(S.sel||S.kosongSel)){S.sel=null;S.kosongSel=null;renderSide()}P=null;draw()});
 cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();zoomDi(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top)},{passive:false});
 cv.addEventListener('dblclick',e=>{const r=cv.getBoundingClientRect(),b=hit(s2w(e.clientX-r.left,e.clientY-r.top));if(b)bukaEditor(b)});
 window.addEventListener('keydown',e=>{if(E.open||!S.sel||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;const b=S.sel;if(b.kunci)return;
@@ -468,7 +472,9 @@ window.addEventListener('keydown',e=>{if(E.open||!S.sel||/INPUT|TEXTAREA|SELECT/
   if(e.key==='q'||e.key==='Q')b.rot-=st*Math.PI/180;else if(e.key==='e'||e.key==='E')b.rot+=st*Math.PI/180;
   else if(e.key==='ArrowLeft')b.x-=mv;else if(e.key==='ArrowRight')b.x+=mv;else if(e.key==='ArrowUp')b.y-=mv;else if(e.key==='ArrowDown')b.y+=mv;else ok=false;
   if(ok){e.preventDefault();simpanBidang(b);updRot();draw()}});
-function tawarKosong(k){S.sel=null;renderSide(`Nomor <b>${esc(k.no)}</b> belum ada SU-nya (disebut oleh ${k.titik.map(t=>esc(t.pemilik.no)).join(', ')}).`,k);draw()}
+function tawarKosong(k){S.sel=null;S.kosongSel=norm(k.no);const pem=[...new Set(k.titik.map(t=>t.pemilik))];
+  renderSide(`Nomor <b>${esc(k.no)}</b> belum ada SU-nya. Disebut sebagai tetangga oleh <b>${pem.length}</b> bidang (garis kuning di puzzle):
+    <div class="list" style="margin-top:6px;background:#fff">${pem.map(b=>`<div class="it" data-id="${b.id}"><i class="dot" style="background:${COL[b.status]}"></i>${esc(b.no)}<small>${b.status==='landing'?'sudah landing':'belum landing'}</small></div>`).join('')}</div>`,k);draw()}
 
 /* ================= PANEL SAMPING ================= */
 function renderSel(){const sel=$('#petaSel');sel.innerHTML=S.peta.length?S.peta.map(p=>`<option value="${p.id}" ${p.id===S.aktif?'selected':''}>${esc(p.nama)}</option>`).join(''):'<option>— belum ada peta analog —</option>';
@@ -494,10 +500,13 @@ function renderSide(pesan,kosong){
     <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${wl(x.level)}"></i>${esc(x.b.no)}<small>${x.level>1?'T'+x.level+' lewat ':''}${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
   if(pesan){h+=`<h3>Info</h3><div class="selbox">${pesan}${kosong?`<div style="margin-top:8px"><button class="pri" id="addFor">+ Masukkan SU nomor ${esc(kosong.no)}</button></div>`:''}</div>`}
   if(S.antrian.length){const q=S.antrian;
-    const kurang=q.filter(a=>a.status!=='proses'&&(a.pesan||!a.luas));
+    const kurang=q.filter(a=>a.status!=='proses'&&!a.aiTunggu&&(a.pesan||!a.luas)),nTunggu=q.filter(a=>a.aiTunggu).length;
     const sdh=new Map();S.bidang.forEach(b=>kunciSemuaBidang(b).forEach(k=>sdh.set(k,b.no)));const dob=a=>sdh.get(kunciSU(a.su,a.tahun,a.nama));
-    h+=`<h3>Antrian SU (${q.length})</h3>${kurang.length&&aiSiap()?`<button id="qUlang" style="width:100%;margin-bottom:6px">↻ Baca ulang ${kurang.length} SU yang belum lengkap</button>`:''}<div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
-      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':'✓ siap digitasi'}</span>${dob(a)?`<br><span class="bdg" style="background:#ffd6e0;color:#a61e4d">⚠ sudah jadi bidang ${esc(dob(a))} – buang ✕</span>`:''}${a.status!=='proses'&&a.pesan?`<br><span class="bdg" style="background:#fff1d6" title="${esc(a.pesan)}">⚠ luas/nomor belum terbaca</span>`:''}</div>
+    h+=`<h3>Antrian SU (${q.length})</h3>`+(AIQ.jalan?`<div class="selbox" style="margin-bottom:6px;font-size:13px">🤖 AI membaca ${AIQ.kini?esc(AIQ.kini.su?AIQ.kini.su+'/'+AIQ.kini.tahun:AIQ.kini.nama):''} • sisa ${nTunggu} SU<span id="aiCd"></span>
+      <div style="font-size:11px;color:var(--mut)">Kartu tetap bisa didigitasi sambil menunggu.</div><button id="aiStop" style="width:100%;margin-top:6px">⏹ Hentikan baca AI</button></div>`
+      :nTunggu?`<button id="aiLanjut" class="pri" style="width:100%;margin-bottom:6px">▶ Lanjutkan baca AI (${nTunggu} SU)</button>`:'')+
+      `${kurang.length&&aiSiap()?`<button id="qUlang" style="width:100%;margin-bottom:6px">↻ Baca ulang ${kurang.length} SU yang belum lengkap</button>`:''}<div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
+      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membuka…':'✓ siap digitasi'}</span>${a.aiTunggu?`<br><span class="bdg" style="background:#e8efff;color:#1e40af">🤖 ${AIQ.kini===a?'sedang dibaca AI':'menunggu baca AI'}</span>`:''}${dob(a)?`<br><span class="bdg" style="background:#ffd6e0;color:#a61e4d">⚠ sudah jadi bidang ${esc(dob(a))} – buang ✕</span>`:''}${a.status!=='proses'&&!a.aiTunggu&&a.pesan?`<br><span class="bdg" style="background:#fff1d6" title="${esc(a.pesan)}">⚠ luas/nomor belum terbaca</span>`:''}</div>
       ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button><button class="x" style="right:30px" data-qr="${a.id}" title="Baca ulang otomatis">↻</button>`:''}</div>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="oLanjut" ${S.opt.lanjut?'checked':''}> Setelah simpan, langsung buka SU berikutnya</label>`}
   if(S.sel&&d.includes(S.sel)){const b=S.sel;
@@ -552,7 +561,8 @@ function renderSide(pesan,kosong){
   on('gSimpan','click',()=>simpanGambar(S.sel));
   on('pSusun','click',()=>susunSemua());on('pBatal','click',batalTata);on('oAuto','change',e=>{S.opt.autoSusun=e.target.checked;lsSet('puzzleSU.autoSusun',e.target.checked?'1':'0')});
   side.querySelectorAll('[data-qr]').forEach(el=>el.addEventListener('click',()=>{const a=S.antrian.find(x=>x.id===el.dataset.qr);if(a)bacaUlang(a)}));
-  on('qUlang','click',()=>S.antrian.filter(a=>a.status!=='proses'&&(a.pesan||!a.luas)).forEach(bacaUlang));
+  on('qUlang','click',()=>S.antrian.filter(a=>a.status!=='proses'&&!a.aiTunggu&&(a.pesan||!a.luas)).forEach(bacaUlang));
+  on('aiStop','click',hentikanAI);on('aiLanjut','click',jalankanAI);
   on('oLanjut','change',e=>{S.opt.lanjut=e.target.checked});
   side.querySelectorAll('.qit[data-q]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.dataset.qx||ev.target.dataset.qr)return;const a=S.antrian.find(x=>x.id===el.dataset.q);if(a&&a.status!=='proses')bukaEditor(null,'',a)}));
   side.querySelectorAll('[data-qx]').forEach(el=>el.addEventListener('click',()=>arm(el,()=>{S.antrian=S.antrian.filter(x=>x.id!==el.dataset.qx);dbDel('antrian',el.dataset.qx);renderSide()},'?')));
@@ -792,16 +802,16 @@ async function panggilProv(p,b64){
     const j=JSON.parse(t);if(j.error)throw /rate|limit|quota/i.test(j.error.message||'')?errPenuh(j.error.message):new Error(j.error.message||'gagal');
     return ambilObj(j.choices[0].message.content)}
   throw new Error('gagal')}
-async function panggilAI(b64){
+async function panggilAI(b64){let adaPenuh=false;
   for(let putaran=0;putaran<2;putaran++){
     for(const p of AI_PROV){if(!siapProv(p)||(penuh[p]||0)>Date.now())continue;
       try{return await panggilProv(p,b64)}
-      catch(e){penuh[p]=Date.now()+(e.penuh?e.tunggu*1000:120000);
+      catch(e){if(e.penuh)adaPenuh=true;penuh[p]=Date.now()+(e.penuh?e.tunggu*1000:120000);
         toast(e.penuh?`${AI_NAMA[p]} penuh – pindah ke AI berikutnya…`:`${AI_NAMA[p]}: ${e.message} – pindah ke AI berikutnya…`,2500)}}
     const sisa=Math.min(...AI_PROV.filter(siapProv).map(p=>(penuh[p]||0)-Date.now()));
     if(putaran===0&&sisa>0&&sisa<=25000){toast(`Semua AI sedang penuh, menunggu ${Math.ceil(sisa/1000)} detik…`);await tidur(sisa+500);continue}
     break}
-  throw new Error('kuota AI gratis habis sementara')}
+  throw Object.assign(new Error(adaPenuh?'kuota AI gratis habis sementara':'AI tidak bisa membaca halaman ini'),{kuota:adaPenuh})}
 // Nama file seperti aplikasi landing_otomatis: SU_16010401_00123_1985.pdf
 function bacaNamaFile(n){const nm=n.replace(/\.[^.]+$/,'');
   const m=nm.match(/(?:^|[^A-Za-z])(SU|GS)[_\s-]?(\d{8})[_\s-]?(\d{1,6})[_\s-]?(\d{4})(?!\d)/i);
@@ -819,47 +829,62 @@ function ubahUkuran(src,maks,q=.85){return new Promise((ok,no)=>{const im=new Im
 const keDataURL=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(r.error);r.readAsDataURL(f)});
 const b64=u=>u.slice(u.indexOf(',')+1);
 let antriProses=Promise.resolve();
-function masukkanBanyak(files){const arr=[...files].filter(f=>/^image\//.test(f.type)||/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+// pakaiAI=false: cepat, hanya nama file + gambar halaman (langsung siap digitasi)
+// pakaiAI=true : setelah siap digitasi, AI terus membaca di belakang sampai selesai atau dihentikan (menunggu bila kuota gratis penuh)
+function masukkanBanyak(files,pakaiAI){const arr=[...files].filter(f=>/^image\//.test(f.type)||/\.pdf$/i.test(f.name)||f.type==='application/pdf');
   if(!arr.length)return toast('Pilih berkas PDF atau gambar SU');
+  if(pakaiAI&&!aiSiap()){toast('AI belum diatur – SU dimasukkan tanpa AI. Atur di Data ▸ Pengaturan baca otomatis.',5000);pakaiAI=false}
   const petaNama=petaAktif()?.nama||'';
   const ada=petaSUada();
   const lewat=[],baru=[];
   arr.forEach(f=>{const nf=bacaNamaFile(f.name),k=kunciSU(nf.nomor,nf.tahun,f.name);
     if(ada.has(k))lewat.push(`${nf.nomor?nf.nomor+'/'+nf.tahun:f.name} (${ada.get(k)})`);else{ada.set(k,'dobel di pilihan ini');baru.push(f)}});
-  if(lewat.length)setTimeout(()=>toast(`${lewat.length} SU dilewati karena sudah ada: ${lewat.slice(0,4).join(', ')}${lewat.length>4?', …':''}`,7000),baru.length?5200:0);
+  if(lewat.length)setTimeout(()=>toast(`${lewat.length} SU dilewati karena sudah ada: ${lewat.slice(0,4).join(', ')}${lewat.length>4?', …':''}`,7000),baru.length?4200:0);
   if(!baru.length)return;
-  const items=baru.map(f=>{const nf=bacaNamaFile(f.name);return{id:uid(),nama:f.name,petaNama,su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:'',dibuat:Date.now(),f}});
+  const items=baru.map(f=>{const nf=bacaNamaFile(f.name);return{id:uid(),nama:f.name,petaNama,su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:'',aiTunggu:!!pakaiAI,dibuat:Date.now(),f}});
   S.antrian.push(...items);renderSide();
-  toast(`${baru.length} SU masuk antrian${aiSiap()?' – dibaca otomatis satu per satu':' – nomor & tahun dari nama file (AI belum diatur: Data ▸ Pengaturan baca otomatis)'}`,5000);
+  toast(`${baru.length} SU masuk antrian – ${pakaiAI?'langsung bisa didigitasi, AI membaca di belakang':'langsung bisa didigitasi (tanpa AI)'}`,4000);
   items.forEach(a=>{antriProses=antriProses.then(()=>prosesSatu(a))});
-  antriProses.then(()=>{const k=items.filter(a=>a.pesan).length;
-    toast(k?`Selesai. ${k} SU belum terbaca otomatis (AI penuh) tapi tetap bisa didigitasi; luas/nomornya isi sendiri atau tekan ↻ nanti.`:'Semua SU di antrian selesai dibaca. Klik kartunya untuk digitasi.',7000)})}
-async function bacaAI(a,hal,gi){a.pesan='';if(!aiSiap())return gi;let adaGambar=false;
-  for(let i=0;i<hal.length;i++){try{const r=await panggilAI(b64(await ubahUkuran(hal[i],1600)));
-      if(r.nomor_surat_ukur&&!a.su)a.su=String(r.nomor_surat_ukur).trim();if(r.tahun&&!a.tahun)a.tahun=String(r.tahun).trim();
-      if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
-      const gb=r.jenis_halaman==='gambar_bidang'||hal.length===1;
-      if(gb&&!adaGambar){adaGambar=true;gi=i;if(r.nomor_tengah)a.no=String(r.nomor_tengah).trim();
-        a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}
-      if(adaGambar&&a.luas)break}
-    catch(e){a.pesan='Belum terbaca otomatis ('+e.message+') – tekan ↻ nanti';break}}
-  return gi}
+  antriProses.then(()=>{if(pakaiAI)jalankanAI()})}
 async function prosesSatu(a){const f=a.f;delete a.f;
   try{let hal=[];
     if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){const lib=await muatPdfjs();const pdf=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
       for(let i=1;i<=Math.min(pdf.numPages,6);i++)hal.push(await renderHalaman(pdf,i,2200))}
     else hal=[await ubahUkuran(await keDataURL(f),2200,.88)];
     // format SU biasa: hal 1 isian, hal 2 gambar, hal 3 pengesahan
-    const gi=await bacaAI(a,hal,hal.length>=2?1:0);
-    a.hal=hal.length>1?hal:null;a.gi=gi;a.img=hal[gi];a.thumb=await ubahUkuran(a.img,260,.7);a.status='siap'}
-  catch(e){a.status='siap';a.pesan=e.message||'gagal dibaca'}
+    const gi=hal.length>=2?1:0;a.hal=hal.length>1?hal:null;a.gi=gi;a.img=hal[gi];a.thumb=await ubahUkuran(a.img,260,.7);a.status='siap'}
+  catch(e){a.status='siap';a.pesan=e.message||'gagal dibuka';a.aiTunggu=false}
   if(S.antrian.includes(a)){dbPut('antrian',a);renderSide()}}
-// Tombol ↻ di kartu antrian: baca ulang dari halaman yang sudah tersimpan (kartu lain tetap bisa dikerjakan)
-function bacaUlang(a){if(!a.img)return;const hal=a.hal||[a.img],nf=bacaNamaFile(a.nama);
-  Object.assign(a,{su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:''});renderSide();
-  if(!aiSiap())toast('AI belum diatur (Data ▸ Pengaturan baca otomatis): hanya nama file yang dibaca ulang',4000);else AI_PROV.forEach(p=>{if((penuh[p]||0)-Date.now()<300000)delete penuh[p]});
-  antriProses=antriProses.then(async()=>{try{const gi=await bacaAI(a,hal,a.gi||0);a.gi=gi;a.img=hal[gi];a.thumb=await ubahUkuran(a.img,260,.7)}catch(e){a.pesan=e.message}
-    a.status='siap';if(S.antrian.includes(a)){dbPut('antrian',a);renderSide();toast(`Selesai dibaca ulang: ${a.nama}`,2500)}})}
+/* ---- Baca AI di belakang: tidak menyerah saat kuota penuh, menunggu lalu lanjut ---- */
+const AIQ={jalan:false,stop:false,tunggu:0,kini:null};
+const tidurSela=async ms=>{const t=Date.now()+ms;while(Date.now()<t&&!AIQ.stop)await tidur(500)};
+async function aiPaksa(gbr){let gagal=0;for(;;){if(AIQ.stop)throw new Error('dihentikan');
+  try{AIQ.tunggu=0;return await panggilAI(gbr)}
+  catch(e){if(AIQ.stop)throw e;const ps=AI_PROV.filter(siapProv);if(!ps.length)throw new Error('AI belum diatur');if(!e.kuota&&++gagal>=4)throw e;
+    const sisa=Math.max(5000,Math.min(...ps.map(p=>(penuh[p]||0)-Date.now())));AIQ.tunggu=Date.now()+sisa;renderSide();await tidurSela(sisa)}}}
+async function bacaAIsatu(a){const hal=a.hal||[a.img];let adaGambar=false,gi=a.gi||0;a.pesan='';
+  for(let i=0;i<hal.length;i++){const r=await aiPaksa(b64(await ubahUkuran(hal[i],1600)));
+    if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
+    const gb=r.jenis_halaman==='gambar_bidang'||hal.length===1;
+    if(gb&&!adaGambar){adaGambar=true;gi=i;if(r.nomor_tengah&&!a.no)a.no=String(r.nomor_tengah).trim();
+      a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}
+    if(adaGambar&&a.luas)break}
+  if(!E.open||E.draft!==a){a.gi=gi;a.img=hal[gi];a.thumb=await ubahUkuran(a.img,260,.7)}
+  else{ // SU ini sedang didigitasi: isi kolom yang masih kosong saja
+    if(!$('#fLuas').value&&a.luas)$('#fLuas').value=a.luas;if(!$('#fNo').value&&a.no){$('#fNo').value=a.no;eDraw()}E.saran=a.sekitar;renderTet();toast('Hasil baca AI masuk ke isian yang masih kosong',2500)}}
+async function jalankanAI(){if(AIQ.jalan)return;if(!aiSiap())return toast('AI belum diatur: Data ▸ Pengaturan baca otomatis',4000);
+  AIQ.jalan=true;AIQ.stop=false;renderSide();let n=0;
+  for(;;){const a=S.antrian.find(x=>x.aiTunggu&&x.img&&x.status==='siap');if(!a||AIQ.stop)break;
+    AIQ.kini=a;renderSide();
+    try{await bacaAIsatu(a);a.aiTunggu=false;n++}catch(e){if(AIQ.stop)break;a.aiTunggu=false;a.pesan='Gagal dibaca AI: '+e.message}
+    AIQ.kini=null;if(S.antrian.includes(a))dbPut('antrian',a);renderSide()}
+  const dihentikan=AIQ.stop;AIQ.jalan=false;AIQ.stop=false;AIQ.kini=null;AIQ.tunggu=0;renderSide();
+  toast(dihentikan?`Baca AI dihentikan (${n} SU selesai). Lanjutkan kapan saja dengan ▶.`:`Baca AI selesai: ${n} SU terbaca.`,5000)}
+function hentikanAI(){AIQ.stop=true;toast('Menghentikan baca AI…',2000)}
+// Tombol ↻ di kartu antrian: masukkan lagi ke antrian baca AI (kartu tetap bisa didigitasi)
+function bacaUlang(a){if(!a.img)return;if(!aiSiap())return toast('AI belum diatur: Data ▸ Pengaturan baca otomatis',4000);
+  Object.assign(a,{luas:0,no:'',sekitar:[],pesan:'',aiTunggu:true});AI_PROV.forEach(p=>{if((penuh[p]||0)-Date.now()<300000)delete penuh[p]});dbPut('antrian',a);renderSide();jalankanAI()}
+setInterval(()=>{const el=document.getElementById('aiCd');if(el){const d=Math.max(0,Math.ceil((AIQ.tunggu-Date.now())/1000));el.textContent=AIQ.tunggu>Date.now()?` • kuota gratis penuh, coba lagi ${Math.floor(d/60)}:${String(d%60).padStart(2,'0')}`:''}},1000);
 // Kunci pembeda SU: nomor 5 angka + tahun (nomor sama tapi tahun beda = SU berbeda); tanpa pola di nama file → nama file
 const kunciSU=(su,th,nama)=>su&&th?String(su).padStart(5,'0')+'/'+th:'f:'+String(nama).toLowerCase();
 // Semua SU yang sudah dimasukkan: kunci -> keterangan
@@ -869,8 +894,9 @@ function petaSUada(){const ada=new Map(),np=id=>S.peta.find(p=>p.id===id)?.nama|
 function kunciBidang(b){const m=String(b.su||'').match(/(\d{1,6})\s*[\/\\|_.,\s-]\s*((?:19|20)\d{2})(?!\d)/);return m?m[1].padStart(5,'0')+'/'+m[2]:null}
 function kunciSemuaBidang(b){const ks=new Set(),k=kunciBidang(b);if(k)ks.add(k);
   [b.berkas,b.catatan].forEach(n=>{if(!n)return;const nf=bacaNamaFile(String(n));if(nf.nomor)ks.add(nf.nomor+'/'+nf.tahun)});if(b.berkas)ks.add('f:'+b.berkas.toLowerCase());return ks}
-$('#btnBanyak').onclick=()=>$('#fBanyak').click();
-$('#fBanyak').onchange=e=>{masukkanBanyak(e.target.files);e.target.value=''};
+let masukAI=false;
+$('#btnBanyak').onclick=()=>{masukAI=false;$('#fBanyak').click()};$('#btnBanyakAI').onclick=()=>{masukAI=true;$('#fBanyak').click()};
+$('#fBanyak').onchange=e=>{masukkanBanyak(e.target.files,masukAI);e.target.value=''};
 $('#stage').addEventListener('dragover',e=>e.preventDefault());
 $('#stage').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length)masukkanBanyak(e.dataTransfer.files)});
 
@@ -922,12 +948,13 @@ function cekNama(files){const ada=petaSUada(),dipilih=new Map();cekBaru=[];let n
     return{f,label,ket,ok}}).sort((a,b)=>a.ok-b.ok);
   $('#cekRingkas').innerHTML=`<b>${files.length}</b> file dicek: <b style="color:${COL.landing}">${cekBaru.length} baru</b>, <b style="color:var(--err)">${nSama} sudah ada/dobel</b>${nTanpa?`, ${nTanpa} tanpa pola nama`:''}`;
   $('#cekTab').innerHTML=rows.map(r=>`<tr><td style="${tdS}"><b>${esc(r.label)}</b><div style="color:var(--mut);font-size:11px">${esc(r.f.name)}</div></td><td style="${tdS};color:${r.ok?COL.landing:'var(--err)'}">${esc(r.ket)}</td></tr>`).join('');
-  const bt=$('#cekMasuk');bt.hidden=!cekBaru.length;bt.textContent=`📥 Masukkan ${cekBaru.length} SU yang baru ke antrian`}
+  const bt=$('#cekMasuk');bt.hidden=!cekBaru.length;bt.textContent=`📥 Masukkan ${cekBaru.length} SU yang baru (tanpa AI)`;$('#cekMasukAI').hidden=!cekBaru.length}
 $('#btnDaftar').onclick=bukaDaftar;$('#suTutup').onclick=()=>$('#suDlg').hidden=true;
 $('#suCari').addEventListener('input',renderDaftar);
 $('#cekPilih').onclick=()=>$('#fCek').click();$('#fCek').onchange=e=>{cekNama(e.target.files);e.target.value=''};
 $('#cekDrop').addEventListener('dragover',e=>e.preventDefault());$('#cekDrop').addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();cekNama(e.dataTransfer.files)});
-$('#cekMasuk').onclick=()=>{const f=cekBaru;cekBaru=[];$('#suDlg').hidden=true;$('#cekTab').innerHTML='';$('#cekRingkas').innerHTML='';$('#cekMasuk').hidden=true;masukkanBanyak(f)};
+const masukCek=ai=>{const f=cekBaru;cekBaru=[];$('#suDlg').hidden=true;$('#cekTab').innerHTML='';$('#cekRingkas').innerHTML='';$('#cekMasuk').hidden=true;$('#cekMasukAI').hidden=true;masukkanBanyak(f,ai)};
+$('#cekMasuk').onclick=()=>masukCek(false);$('#cekMasukAI').onclick=()=>masukCek(true);
 
 /* ================= EKSPOR / IMPOR ================= */
 const tgl=()=>new Date().toISOString().slice(0,10);
