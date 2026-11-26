@@ -236,7 +236,7 @@ const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const norm=n=>String(n||'').toUpperCase().replace(/\s+/g,'');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c',kand2:'#7c3aed'};
+const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c',kand2:'#7c3aed',kand3:'#0d9488'};
 let toastT;function toast(m,ms=2800){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),ms)}
 function arm(btn,fn,txt='Yakin? klik lagi'){ // konfirmasi 2x klik (tanpa confirm())
   if(btn.dataset.arm){delete btn.dataset.arm;btn.textContent=btn.dataset.o;fn();return}
@@ -376,12 +376,13 @@ function jarakBidang(A,B){const a=A.poly.map(q=>keDunia(A,q)),b=B.poly.map(q=>ke
     if(silang(a1,a2,b1,b2))return 0;m=Math.min(m,jtSeg(a1,b1,b2),jtSeg(a2,b1,b2),jtSeg(b1,a1,a2),jtSeg(b2,a1,a2))}}return m}
 function hubung(a,b){if(jarakBidang(a,b)<=TOL_DEMPET)return 'dempet';
   if((a.tetangga||[]).some(t=>norm(t.no)===norm(b.no))||(b.tetangga||[]).some(t=>norm(t.no)===norm(a.no)))return 'su';return null}
-// tingkat 1: menempel bidang sudah landing • tingkat 2: menempel bidang tingkat 1
+// tingkat 1: menempel bidang sudah landing • tingkat 2: menempel tingkat 1 • tingkat 3: menempel tingkat 2 (berhenti di 3)
 function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'),B=d.filter(b=>b.status!=='landing'),hasil=[],lv1=[];
   const cek=(b,acuan,level)=>{const dempet=[],su=[];for(const l of acuan){const h=hubung(b,l);if(h==='dempet')dempet.push(l);else if(h==='su')su.push(l)}
     if(dempet.length||su.length){hasil.push({b,dempet,su,level});return true}return false};
-  B.forEach(b=>{if(cek(b,L,1))lv1.push(b)});B.forEach(b=>{if(!lv1.includes(b))cek(b,lv1,2)});
-  const sk=x=>(x.level===1?100:0)+x.dempet.length*2+x.su.length;return hasil.sort((x,y)=>sk(y)-sk(x))}
+  B.forEach(b=>{if(cek(b,L,1))lv1.push(b)});const lv2=[];B.forEach(b=>{if(!lv1.includes(b)&&cek(b,lv1,2))lv2.push(b)});
+  B.forEach(b=>{if(!lv1.includes(b)&&!lv2.includes(b))cek(b,lv2,3)});
+  const sk=x=>(4-x.level)*100+x.dempet.length*2+x.su.length;return hasil.sort((x,y)=>sk(y)-sk(x))}
 
 /* ================= PUZZLE (kanvas utama) ================= */
 const cv=$('#cv'),ctx=cv.getContext('2d');let DPR=1;
@@ -399,7 +400,7 @@ function draw(){
   const daftar=bidangAktif();$('#welcome').hidden=daftar.length>0;
   if(!daftar.length)return;
   const v=S.view,urut=[...daftar].sort((a,b)=>(a===S.sel)-(b===S.sel));
-  const kand=S.modeLanding?kandidatLanding():null,kMap=kand?new Map(kand.map(k=>[k.b,k.level])):null,wK=kd=>kd===1?COL.kand:COL.kand2;
+  const kand=S.modeLanding?kandidatLanding():null,kMap=kand?new Map(kand.map(k=>[k.b,k.level])):null,wK=kd=>kd===1?COL.kand:kd===2?COL.kand2:COL.kand3;
   for(const b of urut){
     ctx.setTransform(DPR*v.z,0,0,DPR*v.z,DPR*v.x,DPR*v.y);
     ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.rot);ctx.scale(b.s,b.s);ctx.translate(-b.c[0],-b.c[1]);
@@ -485,10 +486,11 @@ function renderSide(pesan,kosong){
   h+=`<div class="stats"><div class="stat"><b>${d.length}</b><span>bidang</span></div><div class="stat"><b style="color:${COL.landing}">${nL}</b><span>sudah landing</span></div><div class="stat"><b style="color:${COL.belum}">${d.length-nL}</b><span>belum landing</span></div></div>`;
   h+=`<div class="legend"><span><i class="dot" style="background:${COL.landing}"></i>Sudah landing</span><span><i class="dot" style="background:${COL.belum}"></i>Belum landing</span><span><i class="dot" style="border:2px dashed ${COL.kosong}"></i>Tetangga belum ada SU</span></div>`;
   if(S.modeLanding){const k=kandidatLanding();
-    const n1=k.filter(x=>x.level===1).length;
+    const n1=k.filter(x=>x.level===1).length,n2=k.filter(x=>x.level===2).length,n3=k.length-n1-n2,wl=l=>l===1?COL.kand:l===2?COL.kand2:COL.kand3;
     h+=`<h3>🎯 Kandidat landing (${k.length})</h3><div class="empty" style="padding:0 0 6px"><i class="dot" style="display:inline-block;background:${COL.kand}"></i> <b>Tingkat 1 (${n1})</b>: menempel langsung dengan bidang sudah landing.<br>
-      <i class="dot" style="display:inline-block;background:${COL.kand2}"></i> <b>Tingkat 2 (${k.length-n1})</b>: menempel dengan bidang tingkat 1.<br><span style="font-size:11px">Menempel = berdempetan di puzzle, atau bertetangga menurut SU.</span></div>
-    <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${x.level===1?COL.kand:COL.kand2}"></i>${esc(x.b.no)}<small>${x.level===2?'lewat ':''}${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
+      <i class="dot" style="display:inline-block;background:${COL.kand2}"></i> <b>Tingkat 2 (${n2})</b>: menempel dengan bidang tingkat 1.<br>
+      <i class="dot" style="display:inline-block;background:${COL.kand3}"></i> <b>Tingkat 3 (${n3})</b>: menempel dengan bidang tingkat 2 (paling jauh sampai sini).<br><span style="font-size:11px">Menempel = berdempetan di puzzle, atau bertetangga menurut SU.</span></div>
+    <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${wl(x.level)}"></i>${esc(x.b.no)}<small>${x.level>1?'T'+x.level+' lewat ':''}${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
   if(pesan){h+=`<h3>Info</h3><div class="selbox">${pesan}${kosong?`<div style="margin-top:8px"><button class="pri" id="addFor">+ Masukkan SU nomor ${esc(kosong.no)}</button></div>`:''}</div>`}
   if(S.antrian.length){const q=S.antrian;
     const kurang=q.filter(a=>a.status!=='proses'&&(a.pesan||!a.luas));
@@ -957,7 +959,7 @@ $('#fImport').onchange=e=>{if(e.target.files[0])imporJSON(e.target.files[0]);e.t
 const _put=simpanBidang;simpanBidang=function(b){b.diubah=Date.now();_put(b)};
 $('#btnAdd').onclick=()=>bukaEditor(null);
 $('#btnLanding').onclick=()=>{S.modeLanding=!S.modeLanding;$('#btnLanding').classList.toggle('on',S.modeLanding);renderSide();draw();
-  if(S.modeLanding){const k=kandidatLanding();toast(k.length?`${k.filter(x=>x.level===1).length} kandidat tingkat 1 (merah muda) dan ${k.filter(x=>x.level===2).length} tingkat 2 (ungu)`:'Belum ada bidang belum landing yang menempel dengan bidang sudah landing',4000)}};
+  if(S.modeLanding){const k=kandidatLanding();toast(k.length?`${k.filter(x=>x.level===1).length} kandidat tingkat 1 (merah muda), ${k.filter(x=>x.level===2).length} tingkat 2 (ungu), ${k.filter(x=>x.level===3).length} tingkat 3 (hijau toska)`:'Belum ada bidang belum landing yang menempel dengan bidang sudah landing',4000)}};
 $('#petaSel').onchange=e=>{S.aktif=e.target.value;S.sel=null;lsSet('puzzleSU.aktif',S.aktif);renderSide();fit()};
 $('#tFit').onclick=fit;$('#tIn').onclick=()=>zoomDi(1.3,cv.clientWidth/2,cv.clientHeight/2);$('#tOut').onclick=()=>zoomDi(1/1.3,cv.clientWidth/2,cv.clientHeight/2);
 $('#btnSide').onclick=()=>$('#side').classList.toggle('open');
