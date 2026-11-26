@@ -22,7 +22,8 @@ lokasi bidang yang sudah / belum landing di Bhumi ATR. Bahasa UI & jawaban: **Ba
 - EDITOR SU: mode batas / tetangga / geser, popup nomor tetangga, tombol Simpan (`#eSave`)
 - DATA juga: `kembalikanPerkiraan(b)`, `susunSemua()` (tombol reset posisi)
 - EDITOR juga: mode potong (`potong()`, undo via `E.stack`), popup nomor tetangga otomatis OK saat klik tempat lain, chip saran `E.saran`
-- BANYAK SU: `masukkanBanyak()` → `prosesSatu()` (pdf.js, nama file `bacaNamaFile`, AI Groq/Ollama `panggilAI`, pengaturan di localStorage `plotkw.ai` sama dengan landing_otomatis)
+- BANYAK SU: `masukkanBanyak()` → `prosesSatu()` (pdf.js, nama file `bacaNamaFile`, AI berantai Groq→Gemini→OpenRouter→Ollama `panggilAI`/`panggilProv`, penyedia penuh dicatat di `penuh{}` lalu pindah; kunci di localStorage `plotkw.ai` (sama dengan landing_otomatis), aktif/nonaktif di `puzzleSU.aiAktif`; `bacaUlang()` tombol ↻)
+- MODE LANDING: `kandidatLanding()` (jarak poligon ≤ `TOL_DEMPET` m atau saling tercatat sebagai tetangga di SU), tombol `#btnLanding`
 - KE AUTOCAD: `lispBidang()` (entmake LWPOLYLINE+TEXT, Y dibalik), `salinGambar()`, `simpanGambar()` (JPG + world file .jgw untuk MAPIINSERT)
 - EKSPOR/IMPOR: JSON cadangan (gabung berdasarkan nomor + `diubah` terbaru), DXF R12 (Y dibalik, meter lokal), CSV, PNG
 

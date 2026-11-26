@@ -107,6 +107,7 @@ aside h3:first-child{margin-top:0}
   <h1>🧩 Puzzle SU</h1>
   <select id="petaSel" style="max-width:260px"></select>
   <div class="sp"></div>
+  <button id="btnLanding" title="Tampilkan bidang belum landing yang menempel dengan bidang sudah landing">🎯 Landing</button>
   <button id="btnBanyak" title="Pilih banyak PDF/gambar SU sekaligus">📥 Banyak SU</button><input type="file" id="fBanyak" multiple accept="application/pdf,.pdf,image/*" hidden>
   <button class="pri" id="btnAdd">+ Bidang dari SU</button>
   <div class="menu">
@@ -194,15 +195,14 @@ aside h3:first-child{margin-top:0}
   </div>
  </div>
 </div>
-<div id="aiDlg" class="modalx" hidden style="position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:30">
+<div id="aiDlg" hidden style="position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:30">
  <div class="mbox"><div class="mhead"><h2>Pengaturan baca otomatis (AI gratis)</h2><button id="aiTutup">Tutup</button></div>
  <div class="isi">
-  <p style="margin-top:0;font-size:13px;color:var(--mut)">Dipakai untuk membaca nomor SU, tahun, luas, nomor di tengah bidang, dan nomor tetangga. Tanpa AI, nomor &amp; tahun tetap dibaca dari <b>nama file</b> (mis. <code>SU_16010401_00123_1985.pdf</code>). Pengaturan ini sama dengan aplikasi landing_otomatis bila dibuka dari alamat yang sama (kanademonday.github.io).</p>
-  <label>Penyedia</label><select id="aiProv"><option value="groq">Groq (online, gratis dengan batas pemakaian)</option><option value="ollama">Ollama (di komputer sendiri)</option><option value="mati">Tidak pakai AI (hanya nama file)</option></select>
-  <div data-p="groq"><label>Kunci API Groq (gsk_…) – buat gratis di console.groq.com</label><input id="aiKey" type="password" autocomplete="off"></div>
-  <div data-p="ollama"><label>Alamat Ollama</label><input id="aiUrl" placeholder="http://localhost:11434"></div>
-  <div data-p="groq ollama"><label>Model pembaca gambar</label><input id="aiModel"></div>
-  <div class="row" style="margin-top:12px"><button class="pri" id="aiSimpan">Simpan</button><button id="aiTes">Tes koneksi</button></div>
+  <p style="margin-top:0;font-size:13px;color:var(--mut)">Nomor SU &amp; tahun selalu dari <b>nama file</b>. AI membaca luas, nomor di tengah bidang, dan nomor tetangga.
+  Isi kunci sebanyak mungkin: AI dicoba berurutan dari atas, dan <b>bila satu kena batas gratis, otomatis pindah ke yang berikutnya</b>. Semua gratis, tanpa kartu kredit.
+  Kunci Groq sama dengan aplikasi landing_otomatis bila dibuka dari kanademonday.github.io.</p>
+  <div id="aiList"></div>
+  <div class="row" style="margin-top:4px"><button class="pri" id="aiSimpan">Simpan</button><button id="aiTes">Tes semua</button></div>
   <div id="aiStat" style="margin-top:8px;font-size:13px"></div>
  </div></div></div>
 <div id="toast"></div>
@@ -214,7 +214,7 @@ const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const norm=n=>String(n||'').toUpperCase().replace(/\s+/g,'');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb'};
+const COL={landing:'#1f9d55',belum:'#e07b16',kosong:'#8a8f98',sel:'#2563eb',kand:'#d6336c'};
 let toastT;function toast(m,ms=2800){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),ms)}
 function arm(btn,fn,txt='Yakin? klik lagi'){ // konfirmasi 2x klik (tanpa confirm())
   if(btn.dataset.arm){delete btn.dataset.arm;btn.textContent=btn.dataset.o;fn();return}
@@ -283,6 +283,21 @@ function kembalikanPerkiraan(b){const m=letakkanOtomatis(b,bidangAktif().filter(
 function susunSemua(){const d=bidangAktif().sort((a,b)=>(a.dibuat||0)-(b.dibuat||0));const ok=d.filter(b=>b.kunci);let n=0;
   for(const b of d){if(b.kunci)continue;letakkanOtomatis(b,ok);simpanBidang(b);ok.push(b);n++}fit();renderSide();toast(`${n} bidang disusun ulang dari perkiraan${ok.length>n?' (bidang terkunci tidak dipindah)':''}`,3500)}
 
+/* Kandidat landing: bidang belum landing yang menempel (di puzzle) atau bertetangga (menurut SU) dengan bidang sudah landing */
+const TOL_DEMPET=1.5; // meter
+function jtSeg(p,a,b){const dx=b[0]-a[0],dy=b[1]-a[1],L=dx*dx+dy*dy;let t=L?((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy)}
+function silang(a,b,c,d){const o=(p,q,r)=>Math.sign((q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]));return o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0}
+function jarakBidang(A,B){const a=A.poly.map(q=>keDunia(A,q)),b=B.poly.map(q=>keDunia(B,q));
+  if(a.some(p=>diDalam(p,b))||b.some(p=>diDalam(p,a)))return 0;let m=Infinity;
+  for(let i=0;i<a.length;i++){const a1=a[i],a2=a[(i+1)%a.length];for(let j=0;j<b.length;j++){const b1=b[j],b2=b[(j+1)%b.length];
+    if(silang(a1,a2,b1,b2))return 0;m=Math.min(m,jtSeg(a1,b1,b2),jtSeg(a2,b1,b2),jtSeg(b1,a1,a2),jtSeg(b2,a1,a2))}}return m}
+function kandidatLanding(){const d=bidangAktif(),L=d.filter(b=>b.status==='landing'),hasil=[];
+  for(const b of d){if(b.status==='landing')continue;const dempet=[],su=[];
+    for(const l of L){if(jarakBidang(b,l)<=TOL_DEMPET)dempet.push(l);
+      else if((b.tetangga||[]).some(t=>norm(t.no)===norm(l.no))||(l.tetangga||[]).some(t=>norm(t.no)===norm(b.no)))su.push(l)}
+    if(dempet.length||su.length)hasil.push({b,dempet,su})}
+  return hasil.sort((x,y)=>(y.dempet.length*2+y.su.length)-(x.dempet.length*2+x.su.length))}
+
 /* ================= PUZZLE (kanvas utama) ================= */
 const cv=$('#cv'),ctx=cv.getContext('2d');let DPR=1;
 function ukurCanvas(){const r=cv.getBoundingClientRect();DPR=window.devicePixelRatio||1;cv.width=Math.max(1,r.width*DPR);cv.height=Math.max(1,r.height*DPR);draw()}
@@ -299,13 +314,15 @@ function draw(){
   const daftar=bidangAktif();$('#welcome').hidden=daftar.length>0;
   if(!daftar.length)return;
   const v=S.view,urut=[...daftar].sort((a,b)=>(a===S.sel)-(b===S.sel));
+  const kand=S.modeLanding?kandidatLanding():null,kSet=kand?new Set(kand.map(k=>k.b)):null;
   for(const b of urut){
     ctx.setTransform(DPR*v.z,0,0,DPR*v.z,DPR*v.x,DPR*v.y);
     ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.rot);ctx.scale(b.s,b.s);ctx.translate(-b.c[0],-b.c[1]);
+    const kd=kSet&&kSet.has(b),redup=kSet&&b.status!=='landing'&&!kd,warna=kd?COL.kand:COL[b.status];if(redup)ctx.globalAlpha=.2;
     pathPoly(ctx,b.poly);const im=S.opt.img?ambilGambar(b.img):null;
-    if(im){ctx.save();ctx.clip();ctx.globalAlpha=S.opt.alpha;ctx.drawImage(im,0,0);ctx.restore()}
-    ctx.fillStyle=COL[b.status]+(im?'26':'55');ctx.fill();
-    ctx.lineWidth=(b===S.sel?3.5:2)/(v.z*b.s);ctx.strokeStyle=b===S.sel?COL.sel:COL[b.status];ctx.stroke();
+    if(im){ctx.save();ctx.clip();ctx.globalAlpha=S.opt.alpha*(redup?.2:1);ctx.drawImage(im,0,0);ctx.restore()}
+    ctx.fillStyle=warna+(im?(kd?'40':'26'):'55');ctx.fill();
+    ctx.lineWidth=(b===S.sel?3.5:kd?4.5:2)/(v.z*b.s);ctx.strokeStyle=b===S.sel?COL.sel:warna;ctx.stroke();
     ctx.restore()}
   ctx.setTransform(DPR,0,0,DPR,0,0);
   const info=infoTetangga(daftar);
@@ -315,7 +332,11 @@ function draw(){
   info.kosong.forEach(k=>k.titik.forEach(t=>{const s=w2s(t.w);ctx.setLineDash([3,3]);ctx.strokeStyle=COL.kosong;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(s[0],s[1],15,0,7);ctx.stroke();ctx.setLineDash([]);
     label(k.no,s[0],s[1],'#4b5160','#f1f2f4e6',11,false)}));
   // nomor pendaftaran tiap bidang
-  for(const b of urut){const s=w2s([b.x,b.y]);label(b.no,s[0],s[1],'#fff',(b===S.sel?COL.sel:COL[b.status])+'f0',13)}
+  for(const b of urut){const s=w2s([b.x,b.y]),kd=kSet&&kSet.has(b);if(kSet&&b.status!=='landing'&&!kd)ctx.globalAlpha=.35;
+    label(b.no,s[0],s[1],'#fff',(b===S.sel?COL.sel:kd?COL.kand:COL[b.status])+'f0',13);ctx.globalAlpha=1}
+  // tetangga yang dicatat dari SU bidang terpilih (termasuk yang sudah didigitasi)
+  if(S.sel&&daftar.includes(S.sel))(S.sel.tetangga||[]).forEach(t=>{const s=w2s(keDunia(S.sel,[t.x,t.y]));
+    ctx.fillStyle='#f59e0b';ctx.beginPath();ctx.arc(s[0],s[1],5,0,7);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();label(t.no,s[0],s[1]-15,'#7c4a03','#fff3d6f2',12)});
   if(S.sel&&S.sel.petaId===S.aktif){const b=S.sel,h=w2s(posHandle(b)),c=w2s([b.x,b.y]);
     ctx.strokeStyle=COL.sel;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(c[0],c[1]);ctx.lineTo(h[0],h[1]);ctx.stroke();
     ctx.fillStyle=b.kunci?'#9aa3b2':COL.sel;ctx.beginPath();ctx.arc(h[0],h[1],8,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(b.kunci?'🔒':'⟳',h[0],h[1]+.5)}
@@ -371,16 +392,25 @@ function renderSide(pesan,kosong){
   else h+=`<div class="empty">Belum ada. Peta analog dibuat saat menyimpan bidang pertama.</div>`;
   h+=`<div class="stats"><div class="stat"><b>${d.length}</b><span>bidang</span></div><div class="stat"><b style="color:${COL.landing}">${nL}</b><span>sudah landing</span></div><div class="stat"><b style="color:${COL.belum}">${d.length-nL}</b><span>belum landing</span></div></div>`;
   h+=`<div class="legend"><span><i class="dot" style="background:${COL.landing}"></i>Sudah landing</span><span><i class="dot" style="background:${COL.belum}"></i>Belum landing</span><span><i class="dot" style="border:2px dashed ${COL.kosong}"></i>Tetangga belum ada SU</span></div>`;
+  if(S.modeLanding){const k=kandidatLanding();
+    h+=`<h3>🎯 Kandidat landing (${k.length})</h3><div class="empty" style="padding:0 0 6px">Bidang <b>belum landing</b> yang menempel dengan bidang <b>sudah landing</b> (berdempetan di puzzle, atau bertetangga menurut SU).</div>
+    <div class="list">${k.length?k.map(x=>`<div class="it" data-id="${x.b.id}"><i class="dot" style="background:${COL.kand}"></i>${esc(x.b.no)}<small>${x.dempet.length?'dempet: '+x.dempet.map(l=>esc(l.no)).join(', '):''}${x.su.length?(x.dempet.length?' • ':'')+'tetangga SU: '+x.su.map(l=>esc(l.no)).join(', '):''}</small></div>`).join(''):'<div class="empty">Belum ada. Tandai dulu bidang yang sudah landing.</div>'}</div>`}
   if(pesan){h+=`<h3>Info</h3><div class="selbox">${pesan}${kosong?`<div style="margin-top:8px"><button class="pri" id="addFor">+ Masukkan SU nomor ${esc(kosong.no)}</button></div>`:''}</div>`}
   if(S.antrian.length){const q=S.antrian;
-    h+=`<h3>Antrian SU (${q.length})</h3><div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
-      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':a.pesan?'⚠ '+esc(a.pesan):'siap digitasi'}</span></div>
+    const kurang=q.filter(a=>a.status!=='proses'&&(a.pesan||!a.luas));
+    h+=`<h3>Antrian SU (${q.length})</h3>${kurang.length&&aiSiap()?`<button id="qUlang" style="width:100%;margin-bottom:6px">↻ Baca ulang ${kurang.length} SU yang belum lengkap</button>`:''}<div class="qgrid">${q.map(a=>`<div class="qit ${a.status==='proses'?'proses':''}" data-q="${a.id}">${a.thumb?`<img src="${a.thumb}" alt="">`:'<img alt="">'}
+      <div><b>${esc(a.no||'no. ?')}</b><br>${a.su?'SU '+esc(a.su)+(a.tahun?'/'+esc(a.tahun):''):'SU ?'}${a.hal&&a.hal.length>1?' • hal '+(a.gi+1):''}${a.luas?' • '+a.luas+' m²':''}<br><span class="bdg">${a.status==='proses'?'membaca…':'✓ siap digitasi'}</span>${a.status!=='proses'&&a.pesan?`<br><span class="bdg" style="background:#fff1d6" title="${esc(a.pesan)}">⚠ luas/nomor belum terbaca</span>`:''}</div>
       ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button><button class="x" style="right:30px" data-qr="${a.id}" title="Baca ulang otomatis">↻</button>`:''}</div>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="oLanjut" ${S.opt.lanjut?'checked':''}> Setelah simpan, langsung buka SU berikutnya</label>`}
   if(S.sel&&d.includes(S.sel)){const b=S.sel;
     h+=`<h3>Bidang terpilih</h3><div class="selbox"><div class="ttl">${esc(b.no)}</div>
     <div style="font-size:12px;color:var(--mut)">${b.luas?b.luas+' m²':'luas belum diisi'}${b.nib?' • NIB '+esc(b.nib):''}${b.su?' • '+esc(b.su):''}</div>
     ${b.catatan?`<div style="font-size:12px;margin-top:4px">${esc(b.catatan)}</div>`:''}
+    <label>Tetangga yang dicatat dari SU ini</label>
+    ${(b.tetangga||[]).length?`<div style="display:flex;flex-wrap:wrap;gap:4px">${b.tetangga.map(t=>{const o=d.find(x=>x!==b&&norm(x.no)===norm(t.no));
+      const gaya=o?(o.status==='landing'?`border-color:${COL.landing};background:#e7f6ed`:`border-color:${COL.belum};background:#fdf0e3`):`border:1px dashed ${COL.kosong};background:#f4f5f7`;
+      return `<button class="chip" data-tn="${esc(norm(t.no))}" style="${gaya}" title="${o?(o.status==='landing'?'sudah didigitasi, sudah landing':'sudah didigitasi, belum landing'):'belum ada SU-nya'}">${esc(t.no)}</button>`}).join('')}</div>
+      <div style="font-size:11px;color:var(--mut);margin-top:3px">hijau = sudah landing • oranye = belum landing • putus-putus = belum ada SU</div>`:'<div class="empty" style="padding:0">Tidak ada nomor tetangga tercatat.</div>'}
     <div class="radio" style="margin-top:8px"><label><input type="radio" name="sSt" value="belum" ${b.status!=='landing'?'checked':''}><span>Belum landing</span></label><label><input type="radio" name="sSt" value="landing" ${b.status==='landing'?'checked':''}><span>Sudah landing</span></label></div>
     <label>Putar: <span id="selRotV"></span></label><input type="range" id="selRot" min="0" max="360" step="0.5">
     <div class="row" style="margin-top:6px"><button id="r90m">↺ 90°</button><button id="r90p">↻ 90°</button><button id="sKunci" class="${b.kunci?'on':''}">${b.kunci?'🔒 Terkunci':'🔓 Kunci'}</button></div>
@@ -415,12 +445,16 @@ function renderSide(pesan,kosong){
   on('scl','change',()=>simpanBidang(S.sel));
   on('sEdit','click',()=>bukaEditor(S.sel));
   on('sReset','click',()=>kembalikanPerkiraan(S.sel));
+  side.querySelectorAll('[data-tn]').forEach(el=>el.addEventListener('click',()=>{const b=S.sel,o=bidangAktif().find(x=>x!==b&&norm(x.no)===el.dataset.tn);
+    if(o)return fokus(o);const t=(b.tetangga||[]).find(t=>norm(t.no)===el.dataset.tn);if(!t)return;const w=keDunia(b,[t.x,t.y]);
+    S.view.x=cv.clientWidth/2-w[0]*S.view.z;S.view.y=cv.clientHeight/2-w[1]*S.view.z;draw();toast(`Nomor ${t.no} belum ada SU-nya`,2000)}));
   on('aBidang','click',()=>salinKeAcad([S.sel]));
   on('aSemua','click',()=>salinKeAcad(bidangAktif()));
   on('gSalin','click',()=>salinGambar(S.sel));
   on('gSimpan','click',()=>simpanGambar(S.sel));
   on('pSusun','click',e=>arm(e.target,susunSemua,'Yakin? posisi geseranmu hilang'));
   side.querySelectorAll('[data-qr]').forEach(el=>el.addEventListener('click',()=>{const a=S.antrian.find(x=>x.id===el.dataset.qr);if(a)bacaUlang(a)}));
+  on('qUlang','click',()=>S.antrian.filter(a=>a.status!=='proses'&&(a.pesan||!a.luas)).forEach(bacaUlang));
   on('oLanjut','change',e=>{S.opt.lanjut=e.target.checked});
   side.querySelectorAll('.qit[data-q]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.dataset.qx||ev.target.dataset.qr)return;const a=S.antrian.find(x=>x.id===el.dataset.q);if(a&&a.status!=='proses')bukaEditor(null,'',a)}));
   side.querySelectorAll('[data-qx]').forEach(el=>el.addEventListener('click',()=>arm(el,()=>{S.antrian=S.antrian.filter(x=>x.id!==el.dataset.qx);dbDel('antrian',el.dataset.qx);renderSide()},'?')));
@@ -572,32 +606,6 @@ $('#eSave').onclick=()=>{
     const nx=S.antrian.find(x=>x.status!=='proses');if(nx&&S.opt.lanjut)setTimeout(()=>bukaEditor(null,'',nx),350)}};
 
 /* ================= BANYAK SU: BACA OTOMATIS (nama file + AI gratis Groq/Ollama) ================= */
-// Pengaturan AI disimpan di kunci yang sama dengan aplikasi landing_otomatis ('plotkw.ai'), jadi kunci Groq bisa dipakai bersama
-const AI_BAWAAN={groq:'qwen/qwen3.8-27b',ollama:'qwen2.5vl:7b'};
-const GROQ_VISI=[/^qwen\/qwen3\.\d+-27b$/,/qwen.*vl/i,/llama-4-(scout|maverick)/i,/vision/i];
-const AI={prov:'groq',keys:{},models:{},url:'http://localhost:11434'};
-try{const v=JSON.parse(lsGet('plotkw.ai')||'{}');AI.prov=v.prov&&v.prov!=='claude'?v.prov:'groq';AI.keys=v.keys||{};AI.models=v.models||{};AI.url=v.url||AI.url;if(lsGet('puzzleSU.aiMati')==='1')AI.prov='mati'}catch(e){}
-const aiModel=()=>AI.models[AI.prov]||AI_BAWAAN[AI.prov];
-const aiSiap=()=>AI.prov==='ollama'||(AI.prov==='groq'&&!!AI.keys.groq);
-function simpanAI(){let v={};try{v=JSON.parse(lsGet('plotkw.ai')||'{}')}catch(e){}
-  if(AI.prov!=='mati')v.prov=AI.prov;v.keys=AI.keys;v.models=AI.models;v.url=AI.url;lsSet('plotkw.ai',JSON.stringify(v));lsSet('puzzleSU.aiMati',AI.prov==='mati'?'1':'0')}
-function bukaAI(){$('#aiProv').value=AI.prov;$('#aiKey').value=AI.keys.groq||'';$('#aiUrl').value=AI.url;$('#aiModel').value=AI.prov==='mati'?'':aiModel();tampilAI();$('#aiStat').textContent='';$('#aiDlg').hidden=false}
-function tampilAI(){const pv=$('#aiProv').value;document.querySelectorAll('#aiDlg [data-p]').forEach(e=>e.hidden=!e.dataset.p.split(' ').includes(pv))}
-function ambilAI(){const pv=$('#aiProv').value;if(pv!=='mati'){AI.prov=pv;AI.keys.groq=$('#aiKey').value.trim();AI.url=($('#aiUrl').value.trim()||AI.url).replace(/\/+$/,'');
-  const m=$('#aiModel').value.trim();if(m)AI.models[pv]=m}else AI.prov='mati';simpanAI()}
-$('#aiProv').onchange=()=>{tampilAI();const pv=$('#aiProv').value;$('#aiModel').value=pv==='mati'?'':(AI.models[pv]||AI_BAWAAN[pv])};
-$('#aiTutup').onclick=()=>$('#aiDlg').hidden=true;
-$('#aiSimpan').onclick=()=>{ambilAI();$('#aiDlg').hidden=true;toast(AI.prov==='mati'?'Baca otomatis hanya dari nama file':'Pengaturan AI disimpan')};
-$('#aiTes').onclick=async()=>{ambilAI();const st=$('#aiStat');st.textContent='Menghubungi…';
-  try{if(AI.prov==='mati'){st.textContent='AI dimatikan.';return}
-    if(AI.prov==='groq'){if(!AI.keys.groq){st.textContent='Isi kunci API Groq dulu.';return}
-      const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:'Bearer '+AI.keys.groq}});if(r.status===401){st.textContent='❌ Kunci salah.';return}
-      const ada=((await r.json()).data||[]).map(m=>m.id);if(ada.includes(aiModel())){st.textContent='✅ Siap. Model '+aiModel()+' tersedia.';return}
-      const g=pilihModelVisi(ada);if(g){AI.models.groq=g;simpanAI();$('#aiModel').value=g;st.textContent='✅ Siap. Model diganti otomatis ke '+g}else st.textContent='⚠ Tidak ada model pembaca gambar yang dikenali.';return}
-    const r=await fetch(AI.url+'/api/tags');const ada=((await r.json()).models||[]).map(m=>m.name);
-    st.textContent=ada.some(n=>n.startsWith(aiModel().split(':')[0]))?'✅ Ollama siap.':`⚠ Model belum diunduh. Jalankan: ollama pull ${aiModel()}`}
-  catch(e){st.textContent='❌ Tidak terhubung ('+e.message+'). Buka aplikasi dari kanademonday.github.io/puzzle_su, bukan dari halaman Claude.'}};
-function pilihModelVisi(ada){for(const re of GROQ_VISI){const m=ada.filter(x=>re.test(x)).sort().reverse()[0];if(m)return m}return null}
 const SKEMA_SU={type:'object',properties:{
   jenis_halaman:{type:'string',enum:['formulir_surat_ukur','gambar_bidang','buku_tanah','lainnya']},
   nomor_surat_ukur:{type:['string','null']},tahun:{type:['string','null']},luas_angka:{type:['number','null']},
@@ -612,25 +620,86 @@ Isi JSON sesuai skema:
 - nomor_sekitar: angka-angka nomor persil/pendaftaran yang tertulis DI LUAR bidang utama, di bidang-bidang sekitarnya. JANGAN masukkan angka ukuran sisi (meter, biasanya ada koma/desimal), nomor titik/patok (angka romawi atau kecil di sudut), atau skala.
 Aturan: JANGAN menebak. Bila tidak terbaca, isi null (atau [] untuk daftar). Jangan menuliskan nama orang.`;
 const tidur=ms=>new Promise(r=>setTimeout(r,ms));
-async function panggilAI(b64){
-  if(AI.prov==='ollama'){let r;try{r=await fetch(AI.url+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:aiModel(),stream:false,format:SKEMA_SU,options:{temperature:0,num_ctx:8192},messages:[{role:'user',content:PROMPT_SU,images:[b64]}]})})}
-    catch(e){throw new Error('Ollama tidak bisa dihubungi')}
-    const t=await r.text();if(!r.ok)throw new Error('Ollama HTTP '+r.status);return JSON.parse(JSON.parse(t).message.content)}
-  const isi=PROMPT_SU+'\n\nBalas HANYA dengan satu objek JSON yang mengikuti skema ini:\n'+JSON.stringify(SKEMA_SU);
-  for(let coba=0;coba<5;coba++){let r;
-    try{r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+AI.keys.groq},
-      body:JSON.stringify({model:aiModel(),temperature:0,response_format:{type:'json_object'},...(coba===0?{reasoning_effort:'none'}:{}),
-        messages:[{role:'user',content:[{type:'text',text:isi},{type:'image_url',image_url:{url:'data:image/jpeg;base64,'+b64}}]}]})})}
-    catch(e){throw new Error('AI tidak bisa dihubungi (buka dari kanademonday.github.io/puzzle_su)')}
-    const t=await r.text();
-    if(r.status===429){const w=Math.min(60,+(r.headers.get('retry-after')||0)||10*(coba+1));toast(`Batas gratis Groq tercapai, menunggu ${w} detik…`);await tidur(w*1000);continue}
+/* AI gratis berantai: Groq → Gemini → OpenRouter → Ollama. Bila satu penuh, otomatis pindah ke berikutnya. */
+const AI_PROV=['groq','gemini','openrouter','ollama'];
+const AI_NAMA={groq:'Groq',gemini:'Google Gemini',openrouter:'OpenRouter',ollama:'Ollama (di komputer sendiri)'};
+const AI_KUNCI={groq:'gsk_…  (buat gratis di console.groq.com → API Keys)',gemini:'AIza…  (gratis di aistudio.google.com → Get API key)',openrouter:'sk-or-…  (gratis di openrouter.ai → Keys)'};
+const AI_BAWAAN={groq:'qwen/qwen3.8-27b',gemini:'gemini-2.5-flash',openrouter:'openrouter/free',ollama:'qwen2.5vl:7b'};
+const GROQ_VISI=[/^qwen\/qwen3\.\d+-27b$/,/qwen.*vl/i,/llama-4-(scout|maverick)/i,/vision/i];
+const AI={keys:{},models:{},url:'http://localhost:11434',aktif:{groq:true,gemini:true,openrouter:true,ollama:false}};
+const penuh={}; // penyedia -> waktu (ms) sampai boleh dicoba lagi
+try{const v=JSON.parse(lsGet('plotkw.ai')||'{}');AI.keys=v.keys||{};AI.models=v.models||{};AI.url=v.url||AI.url;
+  const a=JSON.parse(lsGet('puzzleSU.aiAktif')||'null');if(a)Object.assign(AI.aktif,a);else if(v.prov==='ollama')AI.aktif.ollama=true}catch(e){}
+const siapProv=p=>!!AI.aktif[p]&&(p==='ollama'||!!AI.keys[p]);
+const aiSiap=()=>AI_PROV.some(siapProv);
+const aiModel=p=>AI.models[p]||AI_BAWAAN[p];
+function simpanAI(){let v={};try{v=JSON.parse(lsGet('plotkw.ai')||'{}')}catch(e){}
+  v.keys=AI.keys;v.models=AI.models;v.url=AI.url;if(!v.prov)v.prov='groq';lsSet('plotkw.ai',JSON.stringify(v));lsSet('puzzleSU.aiAktif',JSON.stringify(AI.aktif))}
+function bukaAI(){$('#aiList').innerHTML=AI_PROV.map(p=>`<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px">
+    <label class="chk" style="margin:0 0 6px"><input type="checkbox" data-a="${p}" ${AI.aktif[p]?'checked':''}> <b>${AI_NAMA[p]}</b>&nbsp;<span id="st_${p}" style="font-size:12px"></span></label>
+    ${p==='ollama'?`<input data-u placeholder="http://localhost:11434" value="${esc(AI.url)}">`:`<input data-k="${p}" type="password" autocomplete="off" placeholder="${esc(AI_KUNCI[p])}" value="${esc(AI.keys[p]||'')}">`}
+    <input data-m="${p}" style="margin-top:4px" placeholder="model: kosong = otomatis (${esc(AI_BAWAAN[p])})" value="${esc(AI.models[p]||'')}"></div>`).join('');
+  $('#aiStat').textContent='';$('#aiDlg').hidden=false}
+function ambilAI(){const L=$('#aiList');AI_PROV.forEach(p=>{AI.aktif[p]=L.querySelector(`[data-a="${p}"]`).checked;
+    const k=L.querySelector(`[data-k="${p}"]`);if(k)AI.keys[p]=k.value.trim();const m=L.querySelector(`[data-m="${p}"]`).value.trim();if(m)AI.models[p]=m;else delete AI.models[p]});
+  const u=L.querySelector('[data-u]');if(u&&u.value.trim())AI.url=u.value.trim().replace(/\/+$/,'');AI_PROV.forEach(p=>delete penuh[p]);simpanAI()}
+$('#aiTutup').onclick=()=>$('#aiDlg').hidden=true;
+$('#aiSimpan').onclick=()=>{ambilAI();$('#aiDlg').hidden=true;const n=AI_PROV.filter(siapProv).length;toast(n?`${n} AI aktif. Bila satu penuh, otomatis pindah ke yang lain.`:'Tidak ada AI aktif: hanya nama file yang dibaca')};
+$('#aiTes').onclick=async()=>{ambilAI();const ps=AI_PROV.filter(siapProv);if(!ps.length){$('#aiStat').textContent='Belum ada AI yang aktif dan berkunci.';return}
+  $('#aiStat').textContent='Mengetes…';await Promise.all(ps.map(async p=>{const el=$('#st_'+p);el.textContent='…';try{el.textContent=await tesProv(p)}catch(e){el.textContent='❌ '+e.message}}));
+  $('#aiStat').textContent='Selesai. Model yang dipakai disimpan otomatis.'};
+async function ambilJSONurl(u,o){let r;try{r=await fetch(u,o)}catch(e){throw new Error('tidak terhubung (buka dari kanademonday.github.io/puzzle_su)')}
+  if(r.status===401||r.status===403)throw new Error('kunci salah');if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+function pilihModelVisi(ada){for(const re of GROQ_VISI){const m=ada.filter(x=>re.test(x)).sort().reverse()[0];if(m)return m}return null}
+function pilihGemini(ms){const c=ms.filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace('models/',''))
+    .map(n=>{const x=n.match(/^gemini-(\d+(?:\.\d+)?)-flash(-lite)?$/);return x?{n,v:+x[1],lite:!!x[2]}:null}).filter(Boolean)
+    .sort((a,b)=>b.v-a.v||a.lite-b.lite);return c[0]?c[0].n:null}
+async function cariModel(p){
+  if(p==='groq'){const d=await ambilJSONurl('https://api.groq.com/openai/v1/models',{headers:{Authorization:'Bearer '+AI.keys.groq}});return pilihModelVisi((d.data||[]).map(m=>m.id))}
+  if(p==='gemini'){const d=await ambilJSONurl('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key='+encodeURIComponent(AI.keys.gemini));return pilihGemini(d.models||[])}
+  if(p==='openrouter'){const d=await ambilJSONurl('https://openrouter.ai/api/v1/models');
+    const f=(d.data||[]).filter(m=>/:free$/.test(m.id)&&((m.architecture||{}).input_modalities||[]).includes('image')).map(m=>m.id);return f.find(x=>/qwen.*vl|gemma|llama.*vision/i.test(x))||f[0]||'openrouter/free'}
+  const d=await ambilJSONurl(AI.url+'/api/tags');const ada=(d.models||[]).map(m=>m.name);return ada.find(n=>/vl|vision|llava|gemma3/i.test(n))||null}
+async function tesProv(p){
+  if(p==='openrouter')await ambilJSONurl('https://openrouter.ai/api/v1/key',{headers:{Authorization:'Bearer '+AI.keys.openrouter}});
+  const m=await cariModel(p);if(!m)return p==='ollama'?'⚠ belum ada model pembaca gambar. Jalankan: ollama pull '+AI_BAWAAN.ollama:'⚠ model pembaca gambar tidak ditemukan';
+  if(!AI.models[p]||p!=='ollama'){AI.models[p]=AI.models[p]||m;simpanAI()}return '✅ siap ('+aiModel(p)+')'}
+function errPenuh(teks,detik){const e=new Error('penuh');e.penuh=true;const h=/per.?day|daily|PerDay|RPD|TPD/i.test(teks);e.tunggu=detik||(h?1800:60);return e}
+const ambilObj=c=>JSON.parse(c.slice(c.indexOf('{'),c.lastIndexOf('}')+1));
+const isiPrompt=()=>PROMPT_SU+'\n\nBalas HANYA dengan satu objek JSON yang mengikuti skema ini:\n'+JSON.stringify(SKEMA_SU);
+async function kirim(u,o){try{return await fetch(u,o)}catch(e){throw new Error('tidak terhubung')}}
+async function panggilProv(p,b64){
+  for(let coba=0;coba<3;coba++){const model=aiModel(p);let r,t;
+    if(p==='ollama'){r=await kirim(AI.url+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,stream:false,format:SKEMA_SU,options:{temperature:0,num_ctx:8192},messages:[{role:'user',content:PROMPT_SU,images:[b64]}]})});
+      t=await r.text();if(!r.ok)throw new Error('HTTP '+r.status);return JSON.parse(JSON.parse(t).message.content)}
+    if(p==='gemini'){r=await kirim(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(AI.keys.gemini)}`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{text:isiPrompt()},{inline_data:{mime_type:'image/jpeg',data:b64}}]}],generationConfig:{temperature:0,responseMimeType:'application/json'}})});t=await r.text();
+      if(r.status===429){const d=t.match(/"retryDelay":\s*"(\d+)/);throw errPenuh(t,d?+d[1]+2:0)}
+      if(r.status===404&&coba===0){const m=await cariModel(p).catch(()=>null);if(m&&m!==model){AI.models[p]=m;simpanAI();continue}}
+      if(!r.ok)throw new Error(r.status===400&&/API key/i.test(t)?'kunci salah':'HTTP '+r.status);
+      return ambilObj(JSON.parse(t).candidates[0].content.parts.map(x=>x.text||'').join(''))}
+    // groq & openrouter: format OpenAI
+    const url=p==='groq'?'https://api.groq.com/openai/v1/chat/completions':'https://openrouter.ai/api/v1/chat/completions';
+    const body={model,temperature:0,messages:[{role:'user',content:[{type:'text',text:isiPrompt()},{type:'image_url',image_url:{url:'data:image/jpeg;base64,'+b64}}]}]};
+    if(p==='groq'){body.response_format={type:'json_object'};if(coba===0)body.reasoning_effort='none'}
+    r=await kirim(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+AI.keys[p],...(p==='openrouter'?{'X-Title':'Puzzle SU'}:{})},body:JSON.stringify(body)});t=await r.text();
+    if(r.status===429)throw errPenuh(t,+(r.headers.get('retry-after')||0));
     if(r.status===400&&/reasoning_effort/i.test(t))continue;
-    if((r.status===404||r.status===400)&&/model/i.test(t)&&coba<2){try{const lm=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:'Bearer '+AI.keys.groq}});
-      const g=pilihModelVisi(((await lm.json()).data||[]).map(m=>m.id));if(g&&g!==aiModel()){AI.models.groq=g;simpanAI();continue}}catch(e){}}
-    if(!r.ok)throw new Error(r.status===401?'Kunci API Groq tidak valid':'Groq HTTP '+r.status);
-    const c=JSON.parse(t).choices[0].message.content;return JSON.parse(c.slice(c.indexOf('{'),c.lastIndexOf('}')+1))}
-  throw new Error('Batas gratis Groq masih penuh')}
+    if((r.status===404||r.status===400)&&/model/i.test(t)&&coba<2){const m=await cariModel(p).catch(()=>null);if(m&&m!==model){AI.models[p]=m;simpanAI();continue}}
+    if(!r.ok)throw new Error(r.status===401?'kunci salah':'HTTP '+r.status);
+    const j=JSON.parse(t);if(j.error)throw /rate|limit|quota/i.test(j.error.message||'')?errPenuh(j.error.message):new Error(j.error.message||'gagal');
+    return ambilObj(j.choices[0].message.content)}
+  throw new Error('gagal')}
+async function panggilAI(b64){
+  for(let putaran=0;putaran<2;putaran++){
+    for(const p of AI_PROV){if(!siapProv(p)||(penuh[p]||0)>Date.now())continue;
+      try{return await panggilProv(p,b64)}
+      catch(e){penuh[p]=Date.now()+(e.penuh?e.tunggu*1000:120000);
+        toast(e.penuh?`${AI_NAMA[p]} penuh – pindah ke AI berikutnya…`:`${AI_NAMA[p]}: ${e.message} – pindah ke AI berikutnya…`,2500)}}
+    const sisa=Math.min(...AI_PROV.filter(siapProv).map(p=>(penuh[p]||0)-Date.now()));
+    if(putaran===0&&sisa>0&&sisa<=25000){toast(`Semua AI sedang penuh, menunggu ${Math.ceil(sisa/1000)} detik…`);await tidur(sisa+500);continue}
+    break}
+  throw new Error('kuota AI gratis habis sementara')}
 // Nama file seperti aplikasi landing_otomatis: SU_16010401_00123_1985.pdf
 function bacaNamaFile(n){const nm=n.replace(/\.[^.]+$/,'');
   const m=nm.match(/(?:^|[^A-Za-z])(SU|GS)[_\s-]?(\d{8})[_\s-]?(\d{1,6})[_\s-]?(\d{4})(?!\d)/i);
@@ -662,15 +731,17 @@ function masukkanBanyak(files){const arr=[...files].filter(f=>/^image\//.test(f.
   S.antrian.push(...items);renderSide();
   toast(`${baru.length} SU masuk antrian${aiSiap()?' – dibaca otomatis satu per satu':' – nomor & tahun dari nama file (AI belum diatur: Data ▸ Pengaturan baca otomatis)'}`,5000);
   items.forEach(a=>{antriProses=antriProses.then(()=>prosesSatu(a))});
-  antriProses.then(()=>toast('Semua SU di antrian selesai dibaca. Klik kartunya untuk digitasi.',5000))}
+  antriProses.then(()=>{const k=items.filter(a=>a.pesan).length;
+    toast(k?`Selesai. ${k} SU belum terbaca otomatis (AI penuh) tapi tetap bisa didigitasi; luas/nomornya isi sendiri atau tekan ↻ nanti.`:'Semua SU di antrian selesai dibaca. Klik kartunya untuk digitasi.',7000)})}
 async function bacaAI(a,hal,gi){a.pesan='';if(!aiSiap())return gi;let adaGambar=false;
   for(let i=0;i<hal.length;i++){try{const r=await panggilAI(b64(await ubahUkuran(hal[i],1600)));
       if(r.nomor_surat_ukur&&!a.su)a.su=String(r.nomor_surat_ukur).trim();if(r.tahun&&!a.tahun)a.tahun=String(r.tahun).trim();
       if(r.luas_angka>0&&!a.luas)a.luas=+r.luas_angka;
       const gb=r.jenis_halaman==='gambar_bidang'||hal.length===1;
       if(gb&&!adaGambar){adaGambar=true;gi=i;if(r.nomor_tengah)a.no=String(r.nomor_tengah).trim();
-        a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}}
-    catch(e){a.pesan=e.message;break}}
+        a.sekitar=[...new Set((r.nomor_sekitar||[]).map(x=>String(x).trim()).filter(x=>x&&norm(x)!==norm(a.no)))]}
+      if(adaGambar&&a.luas)break}
+    catch(e){a.pesan='Belum terbaca otomatis ('+e.message+') – tekan ↻ nanti';break}}
   return gi}
 async function prosesSatu(a){const f=a.f;delete a.f;
   try{let hal=[];
@@ -685,7 +756,7 @@ async function prosesSatu(a){const f=a.f;delete a.f;
 // Tombol ↻ di kartu antrian: baca ulang dari halaman yang sudah tersimpan (kartu lain tetap bisa dikerjakan)
 function bacaUlang(a){if(!a.img)return;const hal=a.hal||[a.img],nf=bacaNamaFile(a.nama);
   Object.assign(a,{su:nf.nomor||'',tahun:nf.tahun||'',luas:0,no:'',sekitar:[],status:'proses',pesan:''});renderSide();
-  if(!aiSiap())toast('AI belum diatur (Data ▸ Pengaturan baca otomatis): hanya nama file yang dibaca ulang',4000);
+  if(!aiSiap())toast('AI belum diatur (Data ▸ Pengaturan baca otomatis): hanya nama file yang dibaca ulang',4000);else AI_PROV.forEach(p=>{if((penuh[p]||0)-Date.now()<300000)delete penuh[p]});
   antriProses=antriProses.then(async()=>{try{const gi=await bacaAI(a,hal,a.gi||0);a.gi=gi;a.img=hal[gi];a.thumb=await ubahUkuran(a.img,260,.7)}catch(e){a.pesan=e.message}
     a.status='siap';if(S.antrian.includes(a)){dbPut('antrian',a);renderSide();toast(`Selesai dibaca ulang: ${a.nama}`,2500)}})}
 // Kunci pembeda SU: nomor 5 angka + tahun (nomor sama tapi tahun beda = SU berbeda); tanpa pola di nama file → nama file
@@ -754,6 +825,8 @@ $('#fImport').onchange=e=>{if(e.target.files[0])imporJSON(e.target.files[0]);e.t
 /* ================= MULAI ================= */
 const _put=simpanBidang;simpanBidang=function(b){b.diubah=Date.now();_put(b)};
 $('#btnAdd').onclick=()=>bukaEditor(null);
+$('#btnLanding').onclick=()=>{S.modeLanding=!S.modeLanding;$('#btnLanding').classList.toggle('on',S.modeLanding);renderSide();draw();
+  if(S.modeLanding){const k=kandidatLanding();toast(k.length?`${k.length} bidang belum landing menempel dengan yang sudah landing (warna merah muda)`:'Belum ada bidang belum landing yang menempel dengan bidang sudah landing',4000)}};
 $('#petaSel').onchange=e=>{S.aktif=e.target.value;S.sel=null;lsSet('puzzleSU.aktif',S.aktif);renderSide();fit()};
 $('#tFit').onclick=fit;$('#tIn').onclick=()=>zoomDi(1.3,cv.clientWidth/2,cv.clientHeight/2);$('#tOut').onclick=()=>zoomDi(1/1.3,cv.clientWidth/2,cv.clientHeight/2);
 $('#btnSide').onclick=()=>$('#side').classList.toggle('open');
