@@ -543,7 +543,7 @@ function renderSide(pesan,kosong){
       ${a.status!=='proses'?`<button class="x" data-qx="${a.id}" title="Buang dari antrian">✕</button><button class="x" style="right:30px" data-qr="${a.id}" title="Baca ulang otomatis">↻</button>`:''}</div>`).join('')}</div>
     <label class="chk"><input type="checkbox" id="oLanjut" ${S.opt.lanjut?'checked':''}> Setelah simpan, langsung buka SU berikutnya</label>`}
   if(S.sel&&d.includes(S.sel)){const b=S.sel;
-    h+=`<h3>Bidang terpilih</h3><div class="selbox"><div class="ttl">${esc(b.no)}</div>
+    h+=`<h3 id="selJudul">Bidang terpilih</h3><div class="selbox"><div class="ttl">${esc(b.no)}</div>
     <div style="font-size:12px;color:var(--mut)">${b.luas?b.luas+' m²':'luas belum diisi'}</div>
     <div style="font-size:12px;margin-top:4px;line-height:1.9">No. SU: <b>${esc(b.su||'–')}</b>${cpBtn(suTanpaTahun(b))}<br>No. Hak: <b>${esc(b.hak||'–')}</b>${cpBtn(b.hak)}<br>NIB: <b>${esc(b.nib||'–')}</b>${cpBtn(b.nib)}</div>
     ${b.catatan?`<div style="font-size:12px;margin-top:4px">${esc(b.catatan)}</div>`:''}
@@ -611,7 +611,9 @@ function renderSide(pesan,kosong){
     S.view.x=cv.clientWidth/2-t[0]*S.view.z;S.view.y=cv.clientHeight/2-t[1]*S.view.z;tawarKosong(k)}));
   on('oImg','change',e=>{S.opt.img=e.target.checked;draw()});on('oGar','change',e=>{S.opt.garis=e.target.checked;draw()});on('oSnap','change',e=>{S.opt.snap=e.target.checked});
   on('oAl','input',e=>{S.opt.alpha=+e.target.value;draw()});
-  updRot();renderInfo()}
+  updRot();renderInfo();
+  // bidang baru dipilih: gulir panel kiri ke informasinya
+  if(S.sel!==S.selDigulir){S.selDigulir=S.sel;const j=side.querySelector('#selJudul');if(j)side.scrollTo({top:Math.max(0,j.offsetTop-side.offsetTop-6),behavior:'smooth'})}}
 
 /* Kartu info kiri atas: hanya saat panel ditutup dan ada bidang terpilih (melayang, tidak menggeser tampilan) */
 function renderInfo(){const k=$('#infoKartu'),b=S.sel,tampil=document.body.classList.contains('panelTutup')&&b&&bidangAktif().includes(b);k.hidden=!tampil;if(!tampil)return;
