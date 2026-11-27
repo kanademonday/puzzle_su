@@ -646,7 +646,7 @@ function renderSide(pesan,kosong){VER++;
   on('oLanjut','change',e=>{S.opt.lanjut=e.target.checked});
   side.querySelectorAll('.qit[data-q]').forEach(el=>el.addEventListener('click',ev=>{if(ev.target.dataset.qx||ev.target.dataset.qr)return;const a=S.antrian.find(x=>x.id===el.dataset.q);if(a&&a.status!=='proses')bukaEditor(null,'',a)}));
   side.querySelectorAll('[data-qx]').forEach(el=>el.addEventListener('click',()=>arm(el,()=>{S.antrian=S.antrian.filter(x=>x.id!==el.dataset.qx);dbDel('antrian',el.dataset.qx);renderSide()},'?')));
-  on('sDel','click',e=>arm(e.target,()=>{const b=S.sel;dbDel('bidang',b.id);dbDel('img',b.img);S.bidang=S.bidang.filter(x=>x!==b);S.sel=null;renderSide();draw();toast('Bidang '+b.no+' dihapus')}));
+  on('sDel','click',e=>arm(e.target,()=>{const b=S.sel;hapusBidang(b);renderSide();draw();toast('Bidang '+b.no+' dihapus')}));
   on('cari','input',e=>{S.cari=e.target.value;const pos=e.target.selectionStart;renderSide();const c=$('#cari');c.focus();c.setSelectionRange(pos,pos)});
   side.querySelectorAll('.it[data-id]').forEach(el=>el.addEventListener('click',()=>{const b=S.bidang.find(x=>x.id===el.dataset.id);if(b)fokus(b)}));
   side.querySelectorAll('.it[data-k]').forEach(el=>el.addEventListener('click',()=>{const k=infoTetangga(bidangAktif()).kosong.get(el.dataset.k);if(!k)return;const t=posKosong(k,ukuranBayangan(bidangAktif()));
@@ -1077,12 +1077,28 @@ function renderDaftar(){const q=norm($('#suCari').value),np=id=>S.peta.find(p=>p
     cocok.slice(0,400).map((r,i)=>`<tr data-i="${baris.indexOf(r)}" style="cursor:pointer"><td style="${tdS}"><b>${esc(r.su||'?')}</b>${r.berkas?`<div style="font-size:11px;color:var(--mut)">${esc(r.berkas)}</div>`:''}</td><td style="${tdS}">${esc(r.no||'?')}</td><td style="${tdS}">${esc(r.hak||'')}</td><td style="${tdS}">${esc(r.peta)}</td><td style="${tdS}"><i class="dot" style="display:inline-block;background:${r.warna}"></i> ${r.st}</td><td style="${tdS}">${r.luas?r.luas+' m²':''}</td></tr>`).join('');
   $('#suTab').querySelectorAll('tr[data-i]').forEach(tr=>tr.onclick=()=>{const r=baris[+tr.dataset.i];$('#suDlg').hidden=true;
     if(r.b){S.aktif=r.b.petaId;lsSet('puzzleSU.aktif',S.aktif);renderSel();fokus(r.b)}else if(r.a&&r.a.status!=='proses')bukaEditor(null,'',r.a)})}
-function cekNama(files){const ada=petaSUada(),dipilih=new Map();cekBaru=[];let nSama=0,nTanpa=0;
-  const rows=[...files].map(f=>{const nf=bacaNamaFile(f.name),k=kunciSU(nf.nomor,nf.tahun,f.name),label=nf.nomor?nf.nomor+'/'+nf.tahun:'(nama tidak berpola SU)';
-    let ket,ok=false;if(ada.has(k)){ket='✗ '+ada.get(k);nSama++}else if(dipilih.has(k)){ket='✗ dobel dengan '+dipilih.get(k);nSama++}else{ok=true;dipilih.set(k,f.name);cekBaru.push(f);ket=nf.nomor?'✓ baru':'✓ baru (cek manual: nomor/tahun tidak terbaca dari nama)';if(!nf.nomor)nTanpa++}
-    return{f,label,ket,ok}}).sort((a,b)=>a.ok-b.ok);
-  $('#cekRingkas').innerHTML=`<b>${files.length}</b> file dicek: <b style="color:${COL.landing}">${cekBaru.length} baru</b>, <b style="color:var(--err)">${nSama} sudah ada/dobel</b>${nTanpa?`, ${nTanpa} tanpa pola nama`:''}`;
-  $('#cekTab').innerHTML=rows.map(r=>`<tr><td style="${tdS}"><b>${esc(r.label)}</b><div style="color:var(--mut);font-size:11px">${esc(r.f.name)}</div></td><td style="${tdS};color:${r.ok?COL.landing:'var(--err)'}">${esc(r.ket)}</td></tr>`).join('');
+function hapusBidang(b){dbDel('bidang',b.id);if(b.img)dbDel('img',b.img);potCache.delete(b.id);S.bidang=S.bidang.filter(x=>x!==b);if(S.sel===b)S.sel=null}
+let cekFiles=[];
+function cekNama(files){files=[...files];cekFiles=files;const ada=petaSUada(),dipilih=new Map();cekBaru=[];let nSama=0,nTanpa=0;
+  // kunci SU -> bidang lama / kartu antrian yang memakainya
+  const milik=new Map(),add=(k,o)=>{if(!milik.has(k))milik.set(k,[]);milik.get(k).push(o)};
+  S.bidang.forEach(b=>kunciSemuaBidang(b).forEach(k=>add(k,{b})));S.antrian.forEach(a=>add(kunciSU(a.su,a.tahun,a.nama),{a}));
+  const np=id=>S.peta.find(p=>p.id===id)?.nama||'?';
+  const rows=files.map(f=>{const nf=bacaNamaFile(f.name),k=kunciSU(nf.nomor,nf.tahun,f.name),label=nf.nomor?nf.nomor+'/'+nf.tahun:'(nama tidak berpola SU)';
+    let ket,ok=false,lama=[];if(ada.has(k)){ket='✗ '+ada.get(k);nSama++;lama=[...new Set(milik.get(k)||[])]}else if(dipilih.has(k)){ket='✗ dobel dengan '+dipilih.get(k);nSama++}else{ok=true;dipilih.set(k,f.name);cekBaru.push(f);ket=nf.nomor?'✓ baru':'✓ baru (cek manual: nomor/tahun tidak terbaca dari nama)';if(!nf.nomor)nTanpa++}
+    return{f,label,ket,ok,lama}}).sort((a,b)=>a.ok-b.ok);
+  const semuaLama=[...new Set(rows.flatMap(r=>r.lama.map(o=>o.b||o.a)))],nB=semuaLama.filter(o=>S.bidang.includes(o)).length,nA=semuaLama.length-nB;
+  $('#cekRingkas').innerHTML=`<b>${files.length}</b> file dicek: <b style="color:${COL.landing}">${cekBaru.length} baru</b>, <b style="color:var(--err)">${nSama} sudah ada/dobel</b>${nTanpa?`, ${nTanpa} tanpa pola nama`:''}`+
+    (semuaLama.length?`<button id="cekHapusSemua" class="dan" style="width:100%;margin-top:6px">🗑 Hapus ${nB?nB+' bidang lama':''}${nB&&nA?' + ':''}${nA?nA+' kartu antrian':''} yang SU-nya sama</button>`:'');
+  const tombol=r=>r.lama.map(o=>o.b?`<div style="margin-top:4px"><button class="dan" data-hb="${o.b.id}" style="padding:2px 8px;font-size:12px">🗑 Hapus bidang ${esc(o.b.no)}</button> <button data-lb="${o.b.id}" style="padding:2px 8px;font-size:12px">🔍 Lihat</button></div>`
+    :`<div style="margin-top:4px"><button class="dan" data-ha="${o.a.id}" style="padding:2px 8px;font-size:12px">🗑 Buang dari antrian</button></div>`).join('');
+  $('#cekTab').innerHTML=rows.map(r=>`<tr><td style="${tdS}"><b>${esc(r.label)}</b><div style="color:var(--mut);font-size:11px">${esc(r.f.name)}</div></td><td style="${tdS};color:${r.ok?COL.landing:'var(--err)'}">${esc(r.ket)}${tombol(r)}</td></tr>`).join('');
+  const ulang=m=>{renderSide();draw();renderDaftar();cekNama(cekFiles);toast(m,3000)};
+  $('#cekTab').querySelectorAll('[data-hb]').forEach(bt=>bt.onclick=()=>arm(bt,()=>{const b=S.bidang.find(x=>x.id===bt.dataset.hb);if(b){hapusBidang(b);ulang(`Bidang ${b.no} dihapus – SU-nya sekarang bisa dimasukkan lagi`)}},'Yakin hapus? klik lagi'));
+  $('#cekTab').querySelectorAll('[data-ha]').forEach(bt=>bt.onclick=()=>{S.antrian=S.antrian.filter(x=>x.id!==bt.dataset.ha);dbDel('antrian',bt.dataset.ha);ulang('Kartu dibuang dari antrian')});
+  $('#cekTab').querySelectorAll('[data-lb]').forEach(bt=>bt.onclick=()=>{const b=S.bidang.find(x=>x.id===bt.dataset.lb);if(!b)return;$('#suDlg').hidden=true;S.aktif=b.petaId;lsSet('puzzleSU.aktif',S.aktif);renderSel();fokus(b)});
+  const hs=$('#cekHapusSemua');if(hs)hs.onclick=()=>arm(hs,()=>{let n=0;semuaLama.forEach(o=>{if(S.bidang.includes(o)){hapusBidang(o);n++}else{S.antrian=S.antrian.filter(x=>x!==o);dbDel('antrian',o.id)}});
+    ulang(`${n} bidang lama${semuaLama.length-n?' dan '+(semuaLama.length-n)+' kartu antrian':''} dihapus. File-nya sekarang berstatus baru.`)},`Yakin hapus ${semuaLama.length}? gambar & batasnya ikut hilang – klik lagi`);
   const bt=$('#cekMasuk');bt.hidden=!cekBaru.length;bt.textContent=`📥 Masukkan ${cekBaru.length} SU yang baru (tanpa AI)`;$('#cekMasukAI').hidden=!cekBaru.length}
 $('#btnDaftar').onclick=bukaDaftar;$('#suTutup').onclick=()=>$('#suDlg').hidden=true;
 $('#suCari').addEventListener('input',renderDaftar);
