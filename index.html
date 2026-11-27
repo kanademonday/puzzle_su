@@ -206,6 +206,8 @@ button.cp{padding:0 5px;font-size:12px;line-height:20px;border-radius:5px;margin
       <button id="bFull" type="button">Seluruh gambar</button>
       <div class="sep"></div>
       <button id="bEFit" type="button">⤢</button>
+      <div class="sep"></div>
+      <button id="bPutKiri" type="button" title="Putar halaman 90° ke kiri">⟲ 90°</button><button id="bPutKanan" type="button" title="Putar halaman 90° ke kanan">⟳ 90°</button><button id="bPut180" type="button" title="Putar 180° (halaman terbalik)">↕ 180°</button>
       <span id="halSel" style="display:flex;gap:4px;align-items:center"></span>
     </div>
     <div id="ewrap">
@@ -692,6 +694,16 @@ function undoAksi(){const m=E.mode;
   if(m==='potong')return $('#bUndo').onclick();
   if(m==='batas'){if(E.closed)E.closed=false;else if(E.poly.length)E.poly.pop();else return toast('Tidak ada titik batas untuk dibatalkan',1500);eDraw()}}
 window.addEventListener('keydown',e=>{if(E.open&&(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();undoAksi()}});
+// Putar halaman (scan terbalik/miring): gambar diputar, batas & titik tetangga ikut diputar, halaman PDF di antrian ikut tersimpan
+function putarGambar(arah){if(!E.img)return toast('Belum ada gambar');const W=E.img.width,H=E.img.height,c=document.createElement('canvas'),x=c.getContext('2d');
+  if(arah===2){c.width=W;c.height=H;x.translate(W,H);x.rotate(Math.PI)}else{c.width=H;c.height=W;if(arah===1){x.translate(H,0);x.rotate(Math.PI/2)}else{x.translate(0,W);x.rotate(-Math.PI/2)}}
+  x.drawImage(E.img,0,0);
+  const f=arah===1?(p=>[H-p[1],p[0]]):arah===-1?(p=>[p[1],W-p[0]]):(p=>[W-p[0],H-p[1]]);
+  E.poly=E.poly.map(f);E.tet=E.tet.map(t=>{const q=f([t.x,t.y]);return{...t,x:q[0],y:q[1]}});E.stack=[];
+  const data=c.toDataURL('image/jpeg',.9);E.imgData=data;
+  const d=E.draft;if(d){if(d.hal){d.hal[E.hi]=data;if(d.gi===E.hi)d.img=data}else d.img=data;
+    if(d.img===data)ubahUkuran(data,260,.7).then(t=>{d.thumb=t;if(S.antrian.includes(d)){dbPut('antrian',d);renderSide()}});else if(S.antrian.includes(d))dbPut('antrian',d)}
+  muatGambar(data,false);renderTet();toast(arah===2?'Halaman diputar 180°':'Halaman diputar 90° ke '+(arah===1?'kanan':'kiri'),1800)}
 function potong(a,b){if(!E.img)return;const W=E.img.width,H=E.img.height;
   let x0=Math.max(0,Math.min(a[0],b[0])),y0=Math.max(0,Math.min(a[1],b[1])),x1=Math.min(W,Math.max(a[0],b[0])),y1=Math.min(H,Math.max(a[1],b[1]));
   if(x1-x0<20||y1-y0<20){eDraw();return toast('Seret kotak yang lebih besar untuk memotong')}
@@ -736,7 +748,7 @@ $('#bUndo').onclick=()=>{if(E.mode==='potong'){const st=E.stack.pop();if(!st)ret
   if(E.closed)E.closed=false;else E.poly.pop();eDraw()};
 $('#bClear').onclick=()=>{E.poly=[];E.closed=false;setMode('batas')};
 $('#bFull').onclick=()=>{if(!E.img)return;const w=E.img.width,h=E.img.height;E.poly=[[0,0],[w,0],[w,h],[0,h]];E.closed=true;setMode('tet');keNoSendiri()};
-$('#bEFit').onclick=eFit;
+$('#bEFit').onclick=eFit;$('#bPutKiri').onclick=()=>putarGambar(-1);$('#bPutKanan').onclick=()=>putarGambar(1);$('#bPut180').onclick=()=>putarGambar(2);
 const pilihImg=()=>$('#fImg').click();$('#bImg').onclick=pilihImg;$('#bImg2').onclick=pilihImg;
 $('#fImg').onchange=e=>{bacaFile(e.target.files[0]);e.target.value=''};
 $('#ewrap').addEventListener('dragover',e=>e.preventDefault());$('#ewrap').addEventListener('drop',e=>{e.preventDefault();bacaFile(e.dataTransfer.files[0])});
