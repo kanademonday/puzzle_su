@@ -640,7 +640,7 @@ window.addEventListener('resize',cekSempit);
 const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null,saran:[],draft:null,stack:[],hi:0,halState:{}};
 const ecv=$('#ecv'),ectx=ecv.getContext('2d');
 function bukaEditor(b,noAwal,draft){
-  E.open=true;E.b=b;E.draft=draft||null;E.konfSU=null;E.konfDobel=null;$('#fTdk').checked=!!(b&&b.tidakAda);$('#fOff').checked=!!(b&&b.offline);E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
+  E.open=true;E.b=b;E.draft=draft||null;E.konfSU=null;E.konfDobel=null;E.konfFile=undefined;$('#fTdk').checked=!!(b&&b.tidakAda);$('#fOff').checked=!!(b&&b.offline);E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
   $('#eTitle').textContent=b?'Edit bidang '+b.no:draft?'Digitasi SU dari antrian – '+draft.nama:'Tambah bidang dari SU';
   const p=b?S.peta.find(x=>x.id===b.petaId):petaAktif();
   $('#fPeta').value=draft&&draft.petaNama?draft.petaNama:p?p.nama:'';$('#fNo').value=b?b.no:draft?(draft.no||''):(noAwal||'');
@@ -661,8 +661,10 @@ function pulihkanHal(i){const st=E.halState[i];E.hi=i;E.poly=st.poly;E.tet=st.te
 function pindahHal(i){const hal=E.draft&&E.draft.hal;if(!hal||i===E.hi)return;$('#pop').hidden=true;simpanHal();
   if(E.halState[i]&&E.halState[i].src){const st=pulihkanHal(i);muatGambar(st.src,false)}else{E.hi=i;E.stack=[];muatGambar(hal[i],true)}
   renderTet();setMode(E.closed?'tet':'batas');eDraw()}
-function tutupEditor(){E.open=false;$('#modal').hidden=true;draw()}
-function muatGambar(data,baru){const im=new Image();im.onload=()=>{E.img=im;if(baru){E.imgData=data;E.poly=[];E.tet=[];E.closed=false;setMode('batas');renderTet()}$('#edrop').hidden=true;eFit()};im.src=data}
+function tutupEditor(){muatKe++;E.open=false;$('#modal').hidden=true;draw()}
+// hanya muatan gambar TERAKHIR yang dipakai: muatan lama yang selesai belakangan (mis. kartu antrian sebelumnya) diabaikan
+let muatKe=0;
+function muatGambar(data,baru){const id=++muatKe,im=new Image();im.onload=()=>{if(id!==muatKe)return;E.img=im;if(baru){E.imgData=data;E.poly=[];E.tet=[];E.closed=false;setMode('batas');renderTet()}$('#edrop').hidden=true;eFit()};im.src=data}
 function bacaFile(f){if(!f||!/^image\//.test(f.type))return toast('Berkas harus berupa gambar (JPG/PNG)');const rd=new FileReader();
   rd.onload=()=>{const im=new Image();im.onload=()=>{const M=2200,k=Math.min(1,M/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
     const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);muatGambar(c.toDataURL('image/jpeg',.88),true)};im.src=rd.result};rd.readAsDataURL(f)}
@@ -760,7 +762,12 @@ $('#eSave').onclick=()=>{
   if(!nama)return toast('Isi / pilih nama peta analog dulu'),$('#fPeta').focus();
   if(!no)return toast('Isi nomor pendaftaran bidang ini'),$('#fNo').focus();
   if(!E.img)return toast('Pilih gambar SU dulu');
+  if(E.draft&&E.imgData){const milik=(E.draft.hal||[E.draft.img]).includes(E.imgData)||Object.values(E.halState).some(st=>st.data===E.imgData);
+    if(!milik&&!E.stack.length)return toast('Gambar di editor tidak cocok dengan SU '+E.draft.nama+'. Tutup lalu buka lagi kartunya.',6000)}
   if(E.poly.length<3)return toast('Tandai batas bidang (minimal 3 titik) atau klik “Seluruh gambar”');
+  // No. SU di isian harus sama dengan nama file SU yang sedang didigitasi
+  if(E.draft&&E.draft.su&&E.draft.tahun){const kf=kunciSU(E.draft.su,E.draft.tahun,''),ki=kunciBidang({su:$('#fSu').value});
+    if(ki!==kf&&E.konfFile!==ki){E.konfFile=ki;$('#fSu').focus();return toast(`No. SU di isian (${$('#fSu').value||'kosong'}) berbeda dengan nama file (${kf}). Betulkan, atau klik Simpan sekali lagi bila memang benar.`,8000)}}
   const dob=cariDobel();
   if(dob.list.length&&(dob.blok||E.konfDobel!==dob.sig))return bukaDobel(dob);
   const p=petaDariNama(nama);
@@ -1075,7 +1082,7 @@ function renderDobel(){const d=DOB,np=id=>S.peta.find(p=>p.id===id)?.nama||'?';
   else{const b=d.list[d.tab-1].b;gb.src='';dbGet('img',b.img).then(r=>{if(r&&DOB&&DOB.tab===d.tab)gb.src=r.data});
     const inp=(id,l,v,ph='')=>`<div class="dobr"><span>${l}</span><input id="${id}" value="${esc(v||'')}" placeholder="${ph}"></div>`;
     isi.innerHTML=`<div style="font-size:12px;color:var(--mut);margin-bottom:6px">${esc(d.list[d.tab-1].alasan)} • edit langsung di sini lalu simpan</div>
-      ${inp('dbNo','No. pendaftaran',b.no)}${inp('dbSu','No. SU',b.su,'02201/1992')}${inp('dbHak','No. Hak',b.hak,'5 angka')}${inp('dbNib','NIB',b.nib)}${inp('dbLuas','Luas (m²)',b.luas||'')}${inp('dbCat','Catatan',b.catatan)}
+      ${b.berkas?`<div class="dobr"><span>File asal</span><b>${esc(b.berkas)}</b></div>`:''}${inp('dbNo','No. pendaftaran',b.no)}${inp('dbSu','No. SU',b.su,'02201/1992')}${inp('dbHak','No. Hak',b.hak,'5 angka')}${inp('dbNib','NIB',b.nib)}${inp('dbLuas','Luas (m²)',b.luas||'')}${inp('dbCat','Catatan',b.catatan)}
       <div class="radio" style="margin-top:6px"><label class="stb"><input type="radio" name="dbSt" value="belum" ${b.status!=='landing'?'checked':''}><span>Belum landing</span></label><label class="stl"><input type="radio" name="dbSt" value="landing" ${b.status==='landing'?'checked':''}><span>Sudah landing</span></label></div>
       <div class="row" style="margin-top:10px;flex-wrap:wrap"><button type="button" class="pri" id="dbSimpan">💾 Simpan perubahan bidang lama</button><button type="button" id="dbLihat">🔍 Lihat di puzzle</button></div>
       <div style="font-size:11px;color:var(--mut);margin-top:6px">Batas bidang & titik tetangga bidang lama diubah lewat ✏️ Edit SU di puzzle.</div>`;
