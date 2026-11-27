@@ -167,6 +167,7 @@ button.cp{padding:0 5px;font-size:12px;line-height:20px;border-radius:5px;margin
    <div class="mform">
     <label>Peta analog (pilih yang ada atau ketik nama baru)</label>
     <input id="fPeta" list="petaList" placeholder="mis. Peta Analog Sungai Pinang Dalam 03">
+    <label class="chk" style="color:#b45309"><input type="checkbox" id="fRagu"> ❓ Ragu: belum yakin bidang ini masuk peta analog ini</label>
     <datalist id="petaList"></datalist>
     <label>Nomor pendaftaran bidang ini *</label>
     <input id="fNo" placeholder="isi sendiri bila tidak tertulis di SU">
@@ -472,7 +473,7 @@ function draw(){
     label(k.no,s[0],s[1],pilih?'#fff':'#4b5160',pilih?'#f59e0bf0':'#f1f2f4e6',pilih?13:11,pilih)});
   // nomor pendaftaran tiap bidang
   for(const b of urut){const s=w2s([b.x,b.y]),kd=kMap&&kMap.get(b);if(kMap&&b.status!=='landing'&&!kd&&!khusus(b))ctx.globalAlpha=.35;
-    label(b.no,s[0],s[1],'#fff',(b===S.sel?COL.sel:kd?wK(kd):wB(b))+'f0',13);ctx.globalAlpha=1}
+    label(b.no+(b.raguPeta?' ❓':''),s[0],s[1],'#fff',(b===S.sel?COL.sel:kd?wK(kd):wB(b))+'f0',13);ctx.globalAlpha=1}
   // tetangga yang dicatat dari SU bidang terpilih (termasuk yang sudah didigitasi)
   if(S.sel&&daftar.includes(S.sel))(S.sel.tetangga||[]).forEach(t=>{const s=w2s(keDunia(S.sel,[t.x,t.y]));
     ctx.fillStyle='#f59e0b';ctx.beginPath();ctx.arc(s[0],s[1],5,0,7);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();label(t.no,s[0],s[1]-15,'#7c4a03','#fff3d6f2',12)});
@@ -526,7 +527,7 @@ function renderSel(){const sel=$('#petaSel');sel.innerHTML=S.peta.length?S.peta.
 function updRot(){const r=$('#selRot');if(r&&S.sel){let d=((S.sel.rot*180/Math.PI)%360+360)%360;r.value=d.toFixed(1);$('#selRotV').textContent=d.toFixed(1)+'°'}}
 function renderSide(pesan,kosong){
   const d=bidangAktif(),info=infoTetangga(d),p=petaAktif();const nL=d.filter(b=>b.status==='landing').length;
-  const cari=(S.cari||'').trim();const fil=cari?d.filter(b=>[b.no,b.nib,b.hak,b.su].some(v=>norm(v).includes(norm(cari)))):d;
+  const cari=(S.cari||'').trim();const fil=cari?d.filter(b=>norm(cari)==='RAGU'?b.raguPeta:[b.no,b.nib,b.hak,b.su].some(v=>norm(v).includes(norm(cari)))):d;
   let h='';
   h+=`<h3>Peta analog</h3>`;
   if(p){h+=`<div class="row"><input id="pNama" value="${esc(p.nama)}"><button id="pRen" title="Simpan nama">✔</button><button id="pDel" class="dan" title="Hapus peta">🗑</button></div>`;
@@ -564,7 +565,8 @@ function renderSide(pesan,kosong){
       return `<button class="chip" data-tn="${esc(norm(t.no))}" style="${gaya}" title="${o?(o.status==='landing'?'sudah didigitasi, sudah landing':'sudah didigitasi, belum landing'):'belum ada SU-nya'}">${esc(t.no)}</button>`}).join('')}</div>
       <div style="font-size:11px;color:var(--mut);margin-top:3px">hijau = sudah landing • oranye = belum landing • putus-putus = belum ada SU</div>`:'<div class="empty" style="padding:0">Tidak ada nomor tetangga tercatat.</div>'}
     <div class="radio" style="margin-top:8px"><label class="stb"><input type="radio" name="sSt" value="belum" ${b.status!=='landing'?'checked':''}><span>Belum landing</span></label><label class="stl"><input type="radio" name="sSt" value="landing" ${b.status==='landing'?'checked':''}><span>Sudah landing</span></label></div>
-    ${b.status!=='landing'?`<label class="chk" style="margin-top:6px;color:${COL.off};font-weight:600"><input type="checkbox" id="sOff" ${b.offline?'checked':''}> Sudah dilandingkan offline (sudah kuproses)</label>
+    <label class="chk" style="margin-top:6px;color:#b45309;font-weight:600"><input type="checkbox" id="sRagu" ${b.raguPeta?'checked':''}> ❓ Ragu peta analognya sama</label>
+    ${b.status!=='landing'?`<label class="chk" style="color:${COL.off};font-weight:600"><input type="checkbox" id="sOff" ${b.offline?'checked':''}> Sudah dilandingkan offline (sudah kuproses)</label>
       <label class="chk" style="color:#8b5a2b;font-weight:600"><input type="checkbox" id="sTdk" ${b.tidakAda?'checked':''}> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>`:''}
     <label>Putar: <span id="selRotV"></span></label><input type="range" id="selRot" min="0" max="360" step="0.5">
     <div class="row" style="margin-top:6px"><button id="r90m">↺ 90°</button><button id="r90p">↻ 90°</button><button id="sKunci" class="${b.kunci?'on':''}">${b.kunci?'🔒 Terkunci':'🔓 Kunci'}</button></div>
@@ -575,8 +577,8 @@ function renderSide(pesan,kosong){
     <button id="aSemua" style="width:100%;margin-top:4px" title="Semua bidang peta ini, posisi sesuai puzzle">📐 Salin semua bidang peta ini</button>
     <div class="row" style="margin-top:4px"><button id="gSalin" title="Salin gambar potongan, lalu Ctrl+V di AutoCAD">🖼️ Salin gambar</button><button id="gSimpan" title="JPG + world file (.jgw) untuk MAPIINSERT di AutoCAD Map 3D">💾 Simpan gambar</button></div>
     <div class="row" style="margin-top:8px"><button id="sEdit">✏️ Edit SU</button><button id="sDel" class="dan">🗑 Hapus</button></div></div>`}
-  h+=`<h3>Daftar bidang (${d.length})</h3><input id="cari" placeholder="cari no. pendaftaran / NIB / no. hak / no. SU" value="${esc(cari)}" style="margin-bottom:6px">`;
-  h+=`<div class="list">${fil.length?fil.sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true})).map(b=>`<div class="it ${b===S.sel?'sel':''}" data-id="${b.id}"><i class="dot" style="background:${wB(b)}"></i>${esc(b.no)}<small>${khusus(b)?stTeks(b)+' • ':''}${b.luas?b.luas+' m²':''}</small></div>`).join(''):'<div class="empty">Belum ada bidang.</div>'}</div>`;
+  h+=`<h3>Daftar bidang (${d.length})</h3>${d.some(b=>b.raguPeta)?`<div style="font-size:12px;color:#b45309;margin-bottom:4px">❓ ${d.filter(b=>b.raguPeta).length} bidang ragu peta analognya – ketik <b>ragu</b> di pencarian untuk melihatnya</div>`:''}<input id="cari" placeholder="cari no. pendaftaran / NIB / no. hak / no. SU" value="${esc(cari)}" style="margin-bottom:6px">`;
+  h+=`<div class="list">${fil.length?fil.sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true})).map(b=>`<div class="it ${b===S.sel?'sel':''}" data-id="${b.id}"><i class="dot" style="background:${wB(b)}"></i>${esc(b.no)}<small>${b.raguPeta?'❓ ragu peta • ':''}${khusus(b)?stTeks(b)+' • ':''}${b.luas?b.luas+' m²':''}</small></div>`).join(''):'<div class="empty">Belum ada bidang.</div>'}</div>`;
   const ks=[...info.kosong.values()].sort((a,b)=>a.no.localeCompare(b.no,'id',{numeric:true}));
   h+=`<h3>Tetangga belum ada SU (${ks.length})</h3><div class="list">${ks.length?ks.map(k=>`<div class="it" data-k="${esc(norm(k.no))}"><i class="dot" style="border:2px dashed ${COL.kosong}"></i>${esc(k.no)}<small>dari ${k.titik.map(t=>esc(t.pemilik.no)).join(', ')}</small></div>`).join(''):'<div class="empty">Tidak ada.</div>'}</div>`;
   h+=`<h3>Tampilan</h3>
@@ -594,6 +596,7 @@ function renderSide(pesan,kosong){
   on('selRot','change',()=>simpanBidang(S.sel));
   on('r90m','click',()=>{if(S.sel.kunci)return;S.sel.rot-=Math.PI/2;simpanBidang(S.sel);updRot();draw()});
   on('r90p','click',()=>{if(S.sel.kunci)return;S.sel.rot+=Math.PI/2;simpanBidang(S.sel);updRot();draw()});
+  on('sRagu','change',e=>{S.sel.raguPeta=e.target.checked;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai ❓ ragu peta analognya`:`Tanda ragu bidang ${S.sel.no} dihapus`,2500)});
   on('sOff','change',e=>{S.sel.offline=e.target.checked;if(e.target.checked)S.sel.tidakAda=false;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai biru muda: sudah dilandingkan offline`:`Tanda offline bidang ${S.sel.no} dihapus`,2500)});
   on('sTdk','change',e=>{S.sel.tidakAda=e.target.checked;if(e.target.checked)S.sel.offline=false;simpanBidang(S.sel);renderSide();draw();toast(e.target.checked?`Bidang ${S.sel.no} ditandai coklat: tidak ada di spreadsheet`:`Tanda coklat bidang ${S.sel.no} dihapus`,2500)});
   on('sKunci','click',()=>{S.sel.kunci=!S.sel.kunci;simpanBidang(S.sel);renderSide();draw()});
@@ -629,7 +632,7 @@ function renderSide(pesan,kosong){
 /* Kartu info kiri atas: hanya saat panel ditutup dan ada bidang terpilih (melayang, tidak menggeser tampilan) */
 function renderInfo(){const k=$('#infoKartu'),b=S.sel,tampil=document.body.classList.contains('panelTutup')&&b&&bidangAktif().includes(b);k.hidden=!tampil;if(!tampil)return;
   const row=(l,v,c)=>`<div class="ir"><span>${l}</span><b>${esc(v||'–')}</b>${c?cpBtn(c):''}</div>`;
-  k.innerHTML=`<div class="ik1" style="background:${wB(b)}">${esc(b.no)}<small>${stTeks(b)}</small></div>`+row('No. SU',b.su,suTanpaTahun(b))+row('No. Hak',b.hak,b.hak)+row('NIB',b.nib,b.nib)+row('Luas',b.luas?b.luas+' m²':'')+
+  k.innerHTML=`<div class="ik1" style="background:${wB(b)}">${esc(b.no)}${b.raguPeta?' ❓':''}<small>${stTeks(b)}${b.raguPeta?' • ragu peta':''}</small></div>`+row('No. SU',b.su,suTanpaTahun(b))+row('No. Hak',b.hak,b.hak)+row('NIB',b.nib,b.nib)+row('Luas',b.luas?b.luas+' m²':'')+
     `<div class="row" style="padding:6px 10px;border-top:1px solid #f0f1f4"><button id="ikEdit">✏️ Edit SU</button><button id="ikPanel">☰ Buka panel</button></div>`;
   $('#ikEdit').onclick=()=>bukaEditor(b);$('#ikPanel').onclick=()=>aturPanel(false)}
 document.addEventListener('click',e=>{const c=e.target.closest&&e.target.closest('[data-cp]');if(!c)return;e.stopPropagation();salinTeks(c.dataset.cp).then(ok=>toast(ok?'Tersalin: '+c.dataset.cp:'Browser menolak menyalin',2000))},true);
@@ -642,7 +645,7 @@ window.addEventListener('resize',cekSempit);
 const E={open:false,b:null,img:null,imgId:null,imgData:null,poly:[],tet:[],closed:false,mode:'batas',v:{x:0,y:0,z:1},drag:null,popIdx:-1,popPt:null,saran:[],draft:null,stack:[],hi:0,halState:{}};
 const ecv=$('#ecv'),ectx=ecv.getContext('2d');
 function bukaEditor(b,noAwal,draft){
-  E.open=true;E.b=b;E.draft=draft||null;E.konfSU=null;E.konfDobel=null;E.konfFile=undefined;$('#fTdk').checked=!!(b&&b.tidakAda);$('#fOff').checked=!!(b&&b.offline);E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
+  E.open=true;E.b=b;E.draft=draft||null;E.konfSU=null;E.konfDobel=null;$('#fRagu').checked=!!(b&&b.raguPeta);E.konfFile=undefined;$('#fTdk').checked=!!(b&&b.tidakAda);$('#fOff').checked=!!(b&&b.offline);E.halState={};E.hi=draft?draft.gi||0:0;E.saran=draft?(draft.sekitar||[]):[];E.stack=[];$('#modal').hidden=false;
   $('#eTitle').textContent=b?'Edit bidang '+b.no:draft?'Digitasi SU dari antrian – '+draft.nama:'Tambah bidang dari SU';
   const p=b?S.peta.find(x=>x.id===b.petaId):petaAktif();
   $('#fPeta').value=draft&&draft.petaNama?draft.petaNama:p?p.nama:'';$('#fNo').value=b?b.no:draft?(draft.no||''):(noAwal||'');
@@ -787,7 +790,7 @@ $('#eSave').onclick=()=>{
   const b=lama||{id:uid(),dibuat:Date.now(),kunci:false};
   if(E.imgData){if(b.img)dbDel('img',b.img);b.img=uid();dbPut('img',{id:b.img,data:E.imgData});imgEl.delete(b.img)}
   const cLama=b.c;b.petaId=p.id;b.no=no;b.status=document.querySelector('input[name=fSt]:checked').value;b.offline=b.status!=='landing'&&$('#fOff').checked;b.tidakAda=b.status!=='landing'&&!b.offline&&$('#fTdk').checked;
-  b.luas=parseFloat($('#fLuas').value)||0;b.nib=$('#fNib').value.trim();b.hak=normHak($('#fHak').value);b.su=$('#fSu').value.trim();b.catatan=$('#fCat').value.trim();
+  b.luas=parseFloat($('#fLuas').value)||0;b.nib=$('#fNib').value.trim();b.raguPeta=$('#fRagu').checked;b.hak=normHak($('#fHak').value);b.su=$('#fSu').value.trim();b.catatan=$('#fCat').value.trim();
   b.poly=E.poly.map(q=>[+q[0].toFixed(2),+q[1].toFixed(2)]);b.tetangga=E.tet.filter(t=>t.no.trim()).map(t=>({no:t.no.trim(),x:+t.x.toFixed(2),y:+t.y.toFixed(2)}));
   b.c=pusat(b.poly);b.s=hitungSkala(b);if(E.draft)b.berkas=E.draft.nama;
   let pesan='';
@@ -1036,7 +1039,7 @@ let cekBaru=[];
 const tdS='padding:5px 8px;border-bottom:1px solid #eef0f3;text-align:left;vertical-align:top';
 function bukaDaftar(){$('#suDlg').hidden=false;renderDaftar();setTimeout(()=>$('#suCari').focus(),50)}
 function renderDaftar(){const q=norm($('#suCari').value),np=id=>S.peta.find(p=>p.id===id)?.nama||'?';
-  const baris=[...S.bidang.map(b=>({su:kunciBidang(b)||b.su||'',no:b.no,peta:np(b.petaId),st:stTeks(b),warna:wB(b),luas:b.luas,nib:b.nib||'',hak:b.hak||'',berkas:b.berkas||'',b})),
+  const baris=[...S.bidang.map(b=>({su:kunciBidang(b)||b.su||'',no:b.no,peta:np(b.petaId),st:stTeks(b)+(b.raguPeta?' • ❓ ragu peta':''),warna:wB(b),luas:b.luas,nib:b.nib||'',hak:b.hak||'',berkas:b.berkas||'',b})),
     ...S.antrian.map(a=>({su:a.su?String(a.su).padStart(5,'0')+(a.tahun?'/'+a.tahun:''):'',no:a.no||'',peta:a.petaNama||'',st:'di antrian',warna:COL.kosong,luas:a.luas,nib:'',berkas:a.nama,a}))]
     .sort((x,y)=>x.su.localeCompare(y.su,'id',{numeric:true}));
   const cocok=q?baris.filter(r=>[r.su,r.su.replace(/^0+/,''),r.no,r.nib,r.hak,r.berkas,r.peta].some(v=>norm(v).includes(q))):baris;
@@ -1126,9 +1129,9 @@ function eksporDXF(){const d=bidangAktif();if(!d.length)return toast('Peta ini b
   o.push('0','ENDSEC','0','EOF');download(`${petaAktif().nama.replace(/[^\w\- ]+/g,'_')}.dxf`,o.join('\r\n'),'application/dxf');
   toast('DXF diunduh. Koordinat masih lokal (meter) – geser/putar di AutoCAD ke posisi sebenarnya.',5000)}
 function eksporCSV(){const d=bidangAktif();if(!d.length)return toast('Peta ini belum punya bidang');const info=infoTetangga(d);const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
-  const rows=[['peta_analog','no_pendaftaran','status','luas_m2','nib','no_hak','no_su','tetangga','catatan']];
-  d.forEach(b=>rows.push([petaAktif().nama,b.no,stTeks(b),b.luas||'',b.nib,b.hak||'',b.su,(b.tetangga||[]).map(t=>t.no).join('; '),b.catatan]));
-  info.kosong.forEach(k=>rows.push([petaAktif().nama,k.no,'belum ada SU','','','','',k.titik.map(t=>t.pemilik.no).join('; '),'disebut sebagai tetangga']));
+  const rows=[['peta_analog','no_pendaftaran','status','ragu_peta','luas_m2','nib','no_hak','no_su','tetangga','catatan']];
+  d.forEach(b=>rows.push([petaAktif().nama,b.no,stTeks(b),b.raguPeta?'ya':'',b.luas||'',b.nib,b.hak||'',b.su,(b.tetangga||[]).map(t=>t.no).join('; '),b.catatan]));
+  info.kosong.forEach(k=>rows.push([petaAktif().nama,k.no,'belum ada SU','','','','','',k.titik.map(t=>t.pemilik.no).join('; '),'disebut sebagai tetangga']));
   download(`${petaAktif().nama.replace(/[^\w\- ]+/g,'_')}.csv`,'﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv')}
 function eksporPNG(){cv.toBlob(b=>b&&download(`${(petaAktif()?.nama||'puzzle').replace(/[^\w\- ]+/g,'_')}.png`,b))}
 $('#btnMenu').onclick=e=>{e.stopPropagation();$('#dd').hidden=!$('#dd').hidden};document.addEventListener('click',()=>$('#dd').hidden=true);
