@@ -104,6 +104,12 @@ aside h3:first-child{margin-top:0}
 #aiDlg .isi{padding:14px;overflow:auto}
 @media (max-width:800px){.mform{width:100%;max-height:40%}.mbody{flex-direction:column}aside{width:270px;min-width:240px}}
 body.panelTutup aside{display:none}
+/* editor: isian lebih jelas dibaca */
+.mform label{font-size:13.5px;color:#1d2330;font-weight:600;margin-top:10px}
+.mform input:not([type=checkbox]):not([type=radio]),.mform textarea{font-size:16px;font-weight:600;color:#0f172a;border:1.5px solid #b8bec9;padding:7px 9px;font-variant-numeric:tabular-nums}
+.mform input:not([type=checkbox]):not([type=radio]):focus,.mform textarea:focus{border-color:var(--acc);outline:2px solid #2563eb33}
+.mform input::placeholder,.mform textarea::placeholder{font-weight:400;color:#9aa1ad}
+.mform .chk{font-size:13px}
 header button{white-space:nowrap}
 @media (max-width:1100px){header h1{display:none}header .lbl{display:none}header{gap:6px;padding:0 8px}header button{padding:6px 9px}}
 #infoKartu{position:absolute;left:10px;top:10px;z-index:4;width:270px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 18px #0002;overflow:hidden;font-size:13px}
@@ -179,14 +185,14 @@ button.cp{padding:0 5px;font-size:12px;line-height:20px;border-radius:5px;margin
     </div>
     <label class="chk" style="color:#0891b2;font-weight:600;margin-top:6px"><input type="checkbox" id="fOff"> Sudah dilandingkan offline (sudah kuproses)</label>
     <label class="chk" style="color:#8b5a2b;font-weight:600"><input type="checkbox" id="fTdk"> Tidak ada di daftar spreadsheet (tidak bisa dipakai)</label>
-    <label>Luas (m²) – dipakai agar ukuran puzzle sebanding</label>
+    <label>Luas (m²) <span style="font-weight:400;color:var(--mut)">– agar ukuran puzzle sebanding</span></label>
     <input id="fLuas" type="number" min="0" step="any" placeholder="dari BT/SU">
     <div class="row">
       <div><label>NIB</label><input id="fNib"></div>
-      <div><label>No. Hak (disimpan 5 angka)</label><input id="fHak" placeholder="mis. 1221 → 01221"></div>
     </div>
-    <div class="row">
-      <div><label>No. SU / tahun</label><input id="fSu" placeholder="mis. 02201/1992"></div>
+    <div class="row" style="align-items:flex-end">
+      <div><label>No. Hak <span style="font-weight:400;color:var(--mut)">(5 angka)</span></label><input id="fHak" placeholder="1221 → 01221"></div>
+      <div><label>No. SU / tahun</label><input id="fSu" placeholder="02201/1992"></div>
     </div>
     <label>Catatan</label>
     <textarea id="fCat" rows="2"></textarea>
