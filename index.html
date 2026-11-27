@@ -1113,9 +1113,10 @@ $('#cekMasuk').onclick=()=>masukCek(false);$('#cekMasukAI').onclick=()=>masukCek
 // cocok bila nomor pendaftaran sama (peta mana pun) atau No. SU/tahun sama
 function cariDobel(){const no=$('#fNo').value.trim(),nm=$('#fPeta').value.trim().toLowerCase(),pk=S.peta.find(p=>p.nama.toLowerCase()===nm);
   const kSU=kunciBidang({su:$('#fSu').value})||(E.draft&&E.draft.su?kunciSU(E.draft.su,E.draft.tahun,''):null);
-  const list=S.bidang.filter(x=>x!==E.b&&((no&&norm(x.no)===norm(no))||(kSU&&kunciSemuaBidang(x).has(kSU)))).map(x=>({b:x,
-    alasan:[no&&norm(x.no)===norm(no)?'nomor pendaftaran sama':'',kSU&&kunciSemuaBidang(x).has(kSU)?'No. SU sama':''].filter(Boolean).join(' & '),
-    samaPeta:!!pk&&x.petaId===pk.id&&norm(x.no)===norm(no)}));
+  // nomor pendaftaran hanya dianggap sama di peta analog yang SAMA; No. SU dicek di semua peta
+  const samaNo=x=>!!(no&&pk&&x.petaId===pk.id&&norm(x.no)===norm(no)),samaSU=x=>!!(kSU&&kunciSemuaBidang(x).has(kSU));
+  const list=S.bidang.filter(x=>x!==E.b&&(samaNo(x)||samaSU(x))).map(x=>({b:x,
+    alasan:[samaNo(x)?'nomor pendaftaran sama':'',samaSU(x)?'No. SU sama':''].filter(Boolean).join(' & '),samaPeta:samaNo(x)}));
   return{list,blok:list.some(d=>d.samaPeta),sig:list.map(d=>d.b.id).join(',')+'|'+no+'|'+kSU}}
 function updDobel(){if(!E.open)return;const d=cariDobel(),el=$('#eDobel');el.hidden=!d.list.length;if(!d.list.length)return;
   const np=id=>S.peta.find(p=>p.id===id)?.nama||'?';
