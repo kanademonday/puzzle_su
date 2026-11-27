@@ -138,7 +138,9 @@ button.cp{padding:0 5px;font-size:12px;line-height:20px;border-radius:5px;margin
       <button data-act="ai">⚙️ Pengaturan baca otomatis (AI)</button>
       <button data-act="json">💾 Cadangkan semua data (.json)</button>
       <button data-act="import">📂 Impor data (.json)</button>
-      <button data-act="dxf">📐 Ekspor peta ini ke DXF (AutoCAD)</button>
+      <button data-act="paket">📦 Unduh peta ini: DXF + gambar terpotong (ZIP)</button>
+      <button data-act="dxf">📐 Unduh DXF saja (bidang seukuran luas)</button>
+      <button data-act="gbr">🖼️ Unduh gambar terpotong + world file saja (ZIP)</button>
       <button data-act="csv">📋 Ekspor daftar nomor (.csv)</button>
       <button data-act="png">🖼️ Simpan tampilan sebagai PNG</button>
     </div>
@@ -600,6 +602,7 @@ function renderSide(pesan,kosong){VER++;
     <label>Ke AutoCAD</label>
     <button id="aBidang" style="width:100%" title="Polyline seukuran luas asli + nomor pendaftaran">📐 Salin bidang ini ke AutoCAD</button>
     <button id="aSemua" style="width:100%;margin-top:4px" title="Semua bidang peta ini, posisi sesuai puzzle">📐 Salin semua bidang peta ini</button>
+    <button id="gPaket" style="width:100%;margin-top:4px" title="DXF bidang ini + gambar + world file dalam satu ZIP">📦 Unduh bidang ini (DXF + gambar)</button>
     <div class="row" style="margin-top:4px"><button id="gSalin" title="Salin gambar potongan, lalu Ctrl+V di AutoCAD">🖼️ Salin gambar</button><button id="gSimpan" title="JPG + world file (.jgw) untuk MAPIINSERT di AutoCAD Map 3D">💾 Simpan gambar</button></div>
     <div class="row" style="margin-top:8px"><button id="sEdit">✏️ Edit SU</button><button id="sDel" class="dan">🗑 Hapus</button></div></div>`}
   h+=`<h3>Daftar bidang (${d.length})</h3>${d.some(b=>b.raguPeta)?`<div style="font-size:12px;color:#b45309;margin-bottom:4px">❓ ${d.filter(b=>b.raguPeta).length} bidang ragu peta analognya – ketik <b>ragu</b> di pencarian untuk melihatnya</div>`:''}<input id="cari" placeholder="cari no. pendaftaran / NIB / no. hak / no. SU" value="${esc(cari)}" style="margin-bottom:6px">`;
@@ -635,7 +638,7 @@ function renderSide(pesan,kosong){VER++;
   on('aBidang','click',()=>salinKeAcad([S.sel]));
   on('aSemua','click',()=>salinKeAcad(bidangAktif()));
   on('gSalin','click',()=>salinGambar(S.sel));
-  on('gSimpan','click',()=>simpanGambar(S.sel));
+  on('gSimpan','click',()=>simpanGambar(S.sel));on('gPaket','click',()=>unduhPaket('lengkap',[S.sel]));
   on('pSusun','click',()=>susunSemua());on('pBatal','click',batalTata);on('oAuto','change',e=>{S.opt.autoSusun=e.target.checked;lsSet('puzzleSU.autoSusun',e.target.checked?'1':'0')});
   side.querySelectorAll('[data-qr]').forEach(el=>el.addEventListener('click',()=>{const a=S.antrian.find(x=>x.id===el.dataset.qr);if(a)bacaUlang(a)}));
   on('qUlang','click',()=>S.antrian.filter(a=>a.status!=='proses'&&!a.aiTunggu&&(a.pesan||!a.luas)).forEach(bacaUlang));
@@ -1050,10 +1053,11 @@ async function salinGambar(b){try{const d=await dataGambar(b);
     const png=await new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.width;c.height=im.height;c.getContext('2d').drawImage(im,0,0);c.toBlob(ok,'image/png')};im.onerror=no;im.src=d});
     await navigator.clipboard.write([new ClipboardItem({'image/png':png})]);toast('Gambar tersalin. Di AutoCAD: Ctrl+V lalu klik titik sisip (ukurannya perlu diatur sendiri). Agar pas otomatis, pakai 💾 Simpan gambar.',6000)}
   catch(e){toast('Browser menolak menyalin gambar. Pakai 💾 Simpan gambar.',4000)}}
+function teksJGW(b){const co=Math.cos(b.rot),si=Math.sin(b.rot),s=b.s,w=keDunia(b,[0.5,0.5]);
+  return [s*co,-s*si,-s*si,-s*co,w[0],-w[1]].map(v=>v.toFixed(10)).join('\r\n')+'\r\n'}
 async function simpanGambar(b){try{const d=await dataGambar(b);const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=d});
   // World file: X = A·kol + B·bar + C ; Y = D·kol + E·bar + F (C,F = pusat piksel kiri-atas)
-  const co=Math.cos(b.rot),si=Math.sin(b.rot),s=b.s,w=keDunia(b,[0.5,0.5]);
-  const jgw=[s*co,-s*si,-s*si,-s*co,w[0],-w[1]].map(v=>v.toFixed(10)).join('\r\n')+'\r\n';
+  const jgw=teksJGW(b);
   const nm=namaAman(`${petaAktif()?.nama||'peta'}_${b.no}`);
   download(nm+'.jpg',dataKeBlob(d));setTimeout(()=>download(nm+'.jgw',jgw,'text/plain'),700);
   toast(`Diunduh ${nm}.jpg + ${nm}.jgw (${im.width}×${im.height} px). Di AutoCAD Map 3D: MAPIINSERT → pilih .jpg → Correlation: World file. Gambar langsung pas dengan polyline.`,8000)}
@@ -1146,21 +1150,49 @@ function imporJSON(f){const rd=new FileReader();rd.onload=()=>{try{const d=JSON.
   (d.bidang||[]).forEach(b=>{b.petaId=peta.get(b.petaId)||b.petaId;const lama=S.bidang.find(x=>x.petaId===b.petaId&&norm(x.no)===norm(b.no));
     if(lama){if((b.diubah||0)<(lama.diubah||0)){nl++;return}S.bidang=S.bidang.filter(x=>x!==lama);dbDel('bidang',lama.id)}S.bidang.push(b);dbPut('bidang',b);nb++});
   if(!S.aktif&&S.peta[0])S.aktif=S.peta[0].id;renderSel();renderSide();fit();toast(`Impor selesai: ${nb} bidang masuk${nl?`, ${nl} dilewati (versi lokal lebih baru)`:''}`,4000)}catch(e){toast('Gagal impor: '+e.message,4000)}};rd.readAsText(f)}
-function eksporDXF(){const d=bidangAktif();if(!d.length)return toast('Peta ini belum punya bidang');const o=['0','SECTION','2','ENTITIES'];const f=n=>(+n).toFixed(3);
+function teksDXF(d,denganKosong=true){const o=['0','SECTION','2','ENTITIES'];const f=n=>(+n).toFixed(3);
   const teks=(lay,x,y,h,t)=>o.push('0','TEXT','8',lay,'10',f(x),'20',f(-y),'30','0','40',h,'1',String(t),'72','1','73','2','11',f(x),'21',f(-y),'31','0');
   d.forEach(b=>{const lay=b.status==='landing'?'SU_SUDAH_LANDING':b.offline?'SU_LANDING_OFFLINE':b.tidakAda?'SU_TIDAK_ADA_SPREADSHEET':'SU_BELUM_LANDING';o.push('0','POLYLINE','8',lay,'66','1','70','1','10','0','20','0','30','0');
     b.poly.forEach(q=>{const w=keDunia(b,q);o.push('0','VERTEX','8',lay,'10',f(w[0]),'20',f(-w[1]),'30','0')});o.push('0','SEQEND','8',lay);teks('NO_PENDAFTARAN',b.x,b.y,'2',b.no)});
-  infoTetangga(d).kosong.forEach(k=>k.titik.forEach(t=>teks('TETANGGA_BELUM_ADA_SU',t.w[0],t.w[1],'1.5',k.no)));
-  o.push('0','ENDSEC','0','EOF');download(`${petaAktif().nama.replace(/[^\w\- ]+/g,'_')}.dxf`,o.join('\r\n'),'application/dxf');
+  if(denganKosong)infoTetangga(d).kosong.forEach(k=>k.titik.forEach(t=>teks('TETANGGA_BELUM_ADA_SU',t.w[0],t.w[1],'1.5',k.no)));
+  o.push('0','ENDSEC','0','EOF');return o.join('\r\n')}
+function eksporDXF(){const d=bidangAktif();if(!d.length)return toast('Peta ini belum punya bidang');download(`${namaAman(petaAktif().nama)}.dxf`,teksDXF(d),'application/dxf');
   toast('DXF diunduh. Koordinat masih lokal (meter) – geser/putar di AutoCAD ke posisi sebenarnya.',5000)}
-function eksporCSV(){const d=bidangAktif();if(!d.length)return toast('Peta ini belum punya bidang');const info=infoTetangga(d);const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+function teksCSV(d){const info=infoTetangga(d);const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
   const rows=[['peta_analog','no_pendaftaran','status','ragu_peta','luas_m2','nib','no_hak','no_su','tetangga','catatan']];
   d.forEach(b=>rows.push([petaAktif().nama,b.no,stTeks(b),b.raguPeta?'ya':'',b.luas||'',b.nib,b.hak||'',b.su,(b.tetangga||[]).map(t=>t.no).join('; '),b.catatan]));
   info.kosong.forEach(k=>rows.push([petaAktif().nama,k.no,'belum ada SU','','','','','',k.titik.map(t=>t.pemilik.no).join('; '),'disebut sebagai tetangga']));
-  download(`${petaAktif().nama.replace(/[^\w\- ]+/g,'_')}.csv`,'﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv')}
+  return '﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n')}
+function eksporCSV(){const d=bidangAktif();if(!d.length)return toast('Peta ini belum punya bidang');download(`${namaAman(petaAktif().nama)}.csv`,teksCSV(d),'text/csv')}
+/* ---- Paket ZIP: DXF (bidang seukuran luas) + gambar terpotong + world file, dalam satu unduhan ---- */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC_T[(c^u[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function buatZip(files){const enc=new TextEncoder(),bag=[],pusat=[];let off=0;const d=new Date();
+  const dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  for(const f of files){const nm=enc.encode(f.nama),data=typeof f.data==='string'?enc.encode(f.data):f.data,crc=crc32(data),n=data.length;
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);
+    h.setUint32(14,crc,true);h.setUint32(18,n,true);h.setUint32(22,n,true);h.setUint16(26,nm.length,true);bag.push(new Uint8Array(h.buffer),nm,data);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);
+    c.setUint32(16,crc,true);c.setUint32(20,n,true);c.setUint32(24,n,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);pusat.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+n}
+  const cs=pusat.reduce((s,a)=>s+a.length,0),e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  return new Blob([...bag,...pusat,new Uint8Array(e.buffer)],{type:'application/zip'})}
+// jenis: 'lengkap' (DXF + gambar + jgw + CSV) atau 'gambar' (gambar + jgw saja); daftar: semua bidang peta atau satu bidang
+async function unduhPaket(jenis,daftar){daftar=daftar||bidangAktif();if(!daftar.length)return toast('Peta ini belum punya bidang');
+  const peta=namaAman(petaAktif()?.nama||'peta'),satu=daftar.length===1,dasar=satu?`${peta}_${namaAman(daftar[0].no)}`:peta,files=[];let nG=0;
+  toast(`Menyiapkan ${daftar.length} bidang…`,2000);
+  for(const b of daftar){try{const d=await dataGambar(b),nm=`gambar/${namaAman(b.no)}`;files.push({nama:nm+'.jpg',data:new Uint8Array(await dataKeBlob(d).arrayBuffer())},{nama:nm+'.jgw',data:teksJGW(b)});nG++}catch(e){}}
+  if(jenis==='lengkap'){files.unshift({nama:dasar+'.dxf',data:teksDXF(daftar,!satu)},{nama:dasar+'.csv',data:teksCSV(daftar)})}
+  files.push({nama:'CARA_PAKAI.txt',data:[`Puzzle SU – ${petaAktif()?.nama||''} (${daftar.length} bidang, ${new Date().toLocaleString('id-ID')})`,'',
+    jenis==='lengkap'?`1. Buka / sisipkan ${dasar}.dxf di AutoCAD: polyline tiap bidang sudah seukuran luasnya (meter, koordinat lokal puzzle).`:'1. (Paket ini tanpa DXF – unduh DXF terpisah bila perlu.)',
+    '2. Ekstrak seluruh isi ZIP ke satu folder. File .jpg dan .jgw di folder "gambar" harus tetap berpasangan dengan nama yang sama.',
+    '3. AutoCAD Map 3D: ketik MAPIINSERT → pilih semua file .jpg di folder "gambar" → Correlation: World file. Gambar langsung pas di atas polyline.',
+    '4. Pilih polyline + gambar bersamaan, lalu MOVE / ROTATE / ALIGN ke lokasi sebenarnya.',
+    '','Layer: SU_SUDAH_LANDING, SU_BELUM_LANDING, SU_LANDING_OFFLINE, SU_TIDAK_ADA_SPREADSHEET, NO_PENDAFTARAN, TETANGGA_BELUM_ADA_SU.'].join('\r\n')});
+  download(`${dasar}_${jenis==='lengkap'?'DXF+gambar':'gambar'}.zip`,buatZip(files));
+  toast(`ZIP diunduh: ${jenis==='lengkap'?'DXF + CSV + ':''}${nG} gambar terpotong + world file.`,5000)}
 function eksporPNG(){gambar();cv.toBlob(b=>b&&download(`${(petaAktif()?.nama||'puzzle').replace(/[^\w\- ]+/g,'_')}.png`,b))}
 $('#btnMenu').onclick=e=>{e.stopPropagation();$('#dd').hidden=!$('#dd').hidden};document.addEventListener('click',()=>$('#dd').hidden=true);
-$('#dd').addEventListener('click',e=>{const a=e.target.dataset.act;if(!a)return;({ai:bukaAI,json:eksporJSON,import:()=>$('#fImport').click(),dxf:eksporDXF,csv:eksporCSV,png:eksporPNG})[a]()});
+$('#dd').addEventListener('click',e=>{const a=e.target.dataset.act;if(!a)return;({paket:()=>unduhPaket('lengkap'),gbr:()=>unduhPaket('gambar'),ai:bukaAI,json:eksporJSON,import:()=>$('#fImport').click(),dxf:eksporDXF,csv:eksporCSV,png:eksporPNG})[a]()});
 $('#fImport').onchange=e=>{if(e.target.files[0])imporJSON(e.target.files[0]);e.target.value=''};
 
 /* ================= MULAI ================= */

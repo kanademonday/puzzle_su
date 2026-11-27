@@ -34,6 +34,7 @@ lokasi bidang yang sudah / belum landing di Bhumi ATR. Bahasa UI & jawaban: **Ba
 - MODE LANDING (tingkat 1 merah muda, 2 ungu, 3 biru tua = tingkat 3 dan seterusnya yang menyambung, `hubung()`): `kandidatLanding()` (jarak poligon ≤ `TOL_DEMPET` m atau saling tercatat sebagai tetangga di SU), tombol `#btnLanding`
 - PANEL - KE AUTOCAD: KARTU INFO: `aturPanel(tutup)` (☰ / otomatis tutup bila lebar < 1100 px lewat `cekSempit`), `renderInfo()` kartu kiri atas saat panel tertutup + bidang terpilih; `ukurCanvas` menggeser `S.view.x` agar tampilan tidak bergeser
 - NO. HAK: `b.hak` = `normHak()` 5 angka terakhir dengan nol depan; tombol salin `cpBtn` (No. SU tanpa tahun `suTanpaTahun`, No. Hak, NIB)
+- UNDUH PAKET: `unduhPaket(jenis,daftar)` ZIP buatan sendiri (`buatZip`, `crc32`, tanpa kompresi): DXF (`teksDXF`) + CSV (`teksCSV`) + gambar/*.jpg + .jgw (`teksJGW`) + CARA_PAKAI.txt; jenis lengkap/gambar; per peta atau satu bidang
 - KE AUTOCAD: `lispBidang()` (entmake LWPOLYLINE+TEXT, Y dibalik), `salinGambar()`, `simpanGambar()` (JPG + world file .jgw untuk MAPIINSERT)
 - EKSPOR/IMPOR: JSON cadangan (gabung berdasarkan nomor + `diubah` terbaru), DXF R12 (Y dibalik, meter lokal), CSV, PNG
 
