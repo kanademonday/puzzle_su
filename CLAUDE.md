@@ -17,7 +17,8 @@ lokasi bidang yang sudah / belum landing di Bhumi ATR. Bahasa UI & jawaban: **Ba
 - UTIL, GEOMETRI (`keDunia`, `keLokal`, `pusat`, `luasPoly`)
 - PENYIMPANAN (IndexedDB, `ambilGambar`)
 - DATA: `infoTetangga()` → `{ada, kosong, garis}`; `letakkanOtomatis()` → posisi awal bidang baru
-- PUZZLE: `draw()`, interaksi pointer (geser, putar via handle, snap titik sudut), `fit()`
+- KINERJA: `draw()` hanya menjadwalkan `gambar()` sekali per frame (requestAnimationFrame); `memo()` + `VER` (naik di simpanBidang & renderSide) untuk hasil berat; `potongan()` cache gambar terpotong sesuai batas & diperkecil (maks 900 px), gambar asli hanya saat sangat diperbesar; bidang di luar layar dilewati
+- PUZZLE: `gambar()`, interaksi pointer (geser, putar via handle, snap titik sudut), `fit()`
 - PANEL SAMPING: `renderSide()`
 - EDITOR SU: mode batas / tetangga / geser, popup nomor tetangga, tombol Simpan (`#eSave`)
 - SUSUN GLOBAL: `susunTata(daftar,bebas)` (kendala dari semua nomor tetangga + dorong tumpang-tindih SAT `mtv`, putaran tetap, bidang terkunci = patokan), `susunSemua()`, `kembalikanPerkiraan(b)`, undo `S.undoTata`/`batalTata()`, opsi `S.opt.autoSusun`
